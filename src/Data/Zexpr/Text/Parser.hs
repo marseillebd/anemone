@@ -126,14 +126,14 @@ parseCall = do
     go e0 (ZCombo loc Round es) =
       let loc' = Zexpr.loc e0 <> loc
        in ZCombo loc' Round (e0:es)
-    go e0 (ZCombo loc Square []) =
+    go e0 (ZCombo loc Square (_, [])) =
       let loc' = Zexpr.loc e0 <> loc
           nil = ZCombo loc Round []
        in ZCombo loc' LensIndex (e0, nil)
-    go e0 (ZCombo loc Square [e]) =
+    go e0 (ZCombo loc Square (_, [e])) =
       let loc' = Zexpr.loc e0 <> loc
        in ZCombo loc' LensIndex (e0, e)
-    go e0 (ZCombo loc Square es) =
+    go e0 (ZCombo loc Square (_, es)) =
       let loc' = Zexpr.loc e0 <> loc
           e = ZCombo loc Round es
        in ZCombo loc' LensIndex (e0, e)
@@ -226,16 +226,17 @@ parseCombo = MP.choice
           (loc0, es) <- withLocation (NE.toList <$> parseZexprs)
           MP.choice
             [ do
-                e' <- consDot >> parseZexpr
+                (dotLoc, _) <- withLocation consDot
+                e' <- parseZexpr
                 end
                 loc <- adaptPos pos0 <$> MP.getSourcePos
-                pure $ ZCombo loc ConsDot (es, e')
+                pure $ ZCombo loc ConsDot (es, dotLoc, e')
             , do
-              let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Round es }
-              es' <- MP.some (comma >> parseZexpr)
-              end
-              loc <- adaptPos pos0 <$> MP.getSourcePos
-              pure $ ZCombo loc Round (e0:es')
+                let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Round es }
+                es' <- MP.some (comma >> parseZexpr)
+                end
+                loc <- adaptPos pos0 <$> MP.getSourcePos
+                pure $ ZCombo loc Round (e0:es')
             , do
                 end
                 loc <- adaptPos pos0 <$> MP.getSourcePos
@@ -245,26 +246,26 @@ parseCombo = MP.choice
   square :: Parser Zexpr
   square = do
     pos0 <- MP.getSourcePos
-    _ <- openSquare >> MP.optional inlineSpace
+    (sqLoc, _) <- withLocation openSquare <* MP.optional inlineSpace
     let end = MP.try (MP.optional inlineSpace >> closeSquare)
     MP.choice
       [ do
           end
           loc <- adaptPos pos0 <$> MP.getSourcePos
-          pure $ ZCombo loc Square []
+          pure $ ZCombo loc Square (sqLoc, [])
       , do
           (loc0, es) <- withLocation (NE.toList <$> parseZexprs)
           MP.choice
             [ do
-              let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Square es }
+              let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Square (sqLoc, es) }
               es' <- MP.some (comma >> parseZexpr)
               end
               loc <- adaptPos pos0 <$> MP.getSourcePos
-              pure $ ZCombo loc Square (e0:es')
+              pure $ ZCombo loc Square (sqLoc, e0:es')
             , do
                 end
                 loc <- adaptPos pos0 <$> MP.getSourcePos
-                pure $ ZCombo loc Square es
+                pure $ ZCombo loc Square (sqLoc, es)
             ]
       ]
   curly :: Parser [Zexpr]

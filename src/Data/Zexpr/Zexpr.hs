@@ -20,8 +20,8 @@ data Combine subexpr where
   Dollar :: Combine ()
   QualName :: Combine [(Loc, Symbol)]
   Round :: Combine [Zexpr]
-  Square :: Combine [Zexpr]
-  ConsDot :: Combine ([Zexpr], Zexpr)
+  Square :: Combine (Loc, [Zexpr])
+  ConsDot :: Combine ([Zexpr], Loc, Zexpr)
   LensField :: Combine (Zexpr, Loc, Symbol)
   LensIndex :: Combine (Zexpr, Zexpr)
   FloatLit :: Combine (Integer, Int, Integer)

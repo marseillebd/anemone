@@ -91,16 +91,16 @@ toSexpr conf = go
         then SCombo l (op : args)
         else SCombo l args
   go (ZCombo l Round es) = SCombo l (go <$> es)
-  go (ZCombo l Square es) =
-    let op = SAtom l $ Sym operativeSymbol
-        sq = SAtom l $ Sym squareSymbol
+  go (ZCombo l Square (lSq, es)) =
+    let op = SAtom lSq $ Sym operativeSymbol
+        sq = SAtom lSq $ Sym squareSymbol
         args = sq : map go es
      in if squareIsOperative conf
         then SCombo l (op : args)
         else SCombo l args
-  go (ZCombo l ConsDot (es, e')) =
-    let op = SAtom l $ Sym operativeSymbol
-        il = SAtom l $ Sym improperListSymbol
+  go (ZCombo l ConsDot (es, lDot, e')) =
+    let op = SAtom lDot $ Sym operativeSymbol
+        il = SAtom lDot $ Sym improperListSymbol
         args = il : (map go es ++ [go e'])
      in if improperListIsOperative conf
         then SCombo l (op : args)
@@ -108,14 +108,14 @@ toSexpr conf = go
   go (ZCombo l LensField (e, lF, f)) =
     let op = SAtom l $ Sym operativeSymbol
         fd = SAtom lF $ Sym f
-        lens = SAtom l $ Sym lensFieldSymbol
+        lens = SAtom lF $ Sym lensFieldSymbol
         args = [lens, go e, fd]
      in if lensFieldIsOperative conf
         then SCombo l (op : args)
         else SCombo l args
   go (ZCombo l LensIndex (e, ix)) =
-    let op = SAtom l $ Sym operativeSymbol
-        lens = SAtom l $ Sym lensIndexSymbol
+    let op = SAtom (loc ix) $ Sym operativeSymbol
+        lens = SAtom (loc ix) $ Sym lensIndexSymbol
         args = [lens, go e, go ix]
      in if lensIndexIsOperative conf
         then SCombo l (op : args)
@@ -131,17 +131,17 @@ toSexpr conf = go
     let args = [go e, SAtom lN (Int n)]
      in case overloadedIntegerSymbol of
           Nothing -> SCombo l args
-          Just sym -> SCombo l $ SAtom l (Sym sym) : args
+          Just sym -> SCombo l $ SAtom (loc e) (Sym sym) : args
   go (ZCombo l MakeFloat (e, lN, (sig, base, exp))) =
     let args = [go e, SAtom lN (Int sig), SAtom lN (Int $ fromIntegral base), SAtom lN (Int exp)]
      in case overloadedFloatSymbol of
           Nothing -> SCombo l args
-          Just sym -> SCombo l $ SAtom l (Sym sym) : args
+          Just sym -> SCombo l $ SAtom (loc e) (Sym sym) : args
   go (ZCombo l MakeStr (e, lS, s)) =
     let args = [go e, SAtom lS (Str s)]
      in case overloadedStringSymbol of
           Nothing -> SCombo l args
-          Just sym -> SCombo l $ SAtom l (Sym sym) : args
+          Just sym -> SCombo l $ SAtom (loc e) (Sym sym) : args
   go (ZCombo l Tick (lT, e)) =
     let op = SAtom lT (Sym operativeSymbol)
         q = SAtom lT (Sym tickSymbol)
