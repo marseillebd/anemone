@@ -1,6 +1,7 @@
 module Main (main) where
 
-import Data.Zexpr.Text.Render (crapDisplay)
+import Data.Zexpr (toSexpr,defaultConf)
+import Data.Zexpr.Sexpr.Text.Render (renderPlain)
 import Data.Zexpr.Text.Parser (parse,errorBundlePretty)
 import System.Exit (exitFailure)
 import System.IO (stderr,hPutStr)
@@ -16,4 +17,4 @@ main = do
       hPutStr stderr $ errorBundlePretty err
       exitFailure
     Right vs -> pure vs
-  (putStrLn . crapDisplay) `mapM_` vs
+  (putStrLn . renderPlain . toSexpr defaultConf) `mapM_` vs

@@ -19,6 +19,7 @@ library
     Data.Zexpr
     Data.Zexpr.Location
     Data.Zexpr.Sexpr
+    Data.Zexpr.Sexpr.Text.Render
     Data.Zexpr.Text.Parser
     Data.Zexpr.Text.Render
     Data.Zexpr.Zexpr

@@ -51,30 +51,30 @@ data Conf = Conf
 
 defaultConf :: Conf
 defaultConf = Conf
-  { operativeName = "$"
+  { operativeName = "__operate__"
   , qualifyName = "__qualName__"
-  , qualifyIsOperative = True
+  , qualifyIsOperative = False
   , squareName = "__list__"
-  , squareIsOperative = True
-  , improperListName = "__improperSnoc__"
-  , improperListIsOperative = True
+  , squareIsOperative = False
+  , improperListName = "__improper-list__"
+  , improperListIsOperative = False
   , lensFieldName = "__lensField__"
-  , lensFieldIsOperative = True
+  , lensFieldIsOperative = False
   , lensIndexName = "__lensIndex__"
-  , lensIndexIsOperative = True
+  , lensIndexIsOperative = False
   , floatLiteralName = "__mkDefaultFloat__"
-  , floatLiteralIsOperative = True
+  , floatLiteralIsOperative = False
   , overloadedIntegerOperativeName = Just "__mkInt__"
   , overloadedFloatOperativeName = Just "__mkFloat__"
   , overloadedStringOperativeName = Just "__mkString__"
   , tickName = "__quote__"
-  , tickIsOperative = True
+  , tickIsOperative = False
   , backtickName = "__quasiquote__"
-  , backtickIsOperative = True
+  , backtickIsOperative = False
   , commaName = "__unquote__"
-  , commaIsOperative = True
+  , commaIsOperative = False
   , commaAtName = "__unquote-splicing__"
-  , commaAtIsOperative = True
+  , commaAtIsOperative = False
   }
 
 
