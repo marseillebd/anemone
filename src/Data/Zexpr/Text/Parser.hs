@@ -2,17 +2,18 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Data.Zexpr.Parser
-  ( -- FIXME below here is to get rid of warnings
-    parseAtom -- DEBUG
-  , parse
+module Data.Zexpr.Text.Parser
+  ( parse
+  , isSymChar
+  -- * Re-exports
+  , TokenError
+  , MP.errorBundlePretty
   ) where
 
-import Prelude hiding (round)
+import Prelude hiding (round,significand,exponent,exp)
 
 import Control.Monad (when,void)
 import Control.Monad.State.Strict (State,get,put,evalState)
-import Data.ByteString (ByteString)
 import Data.Char (isAlphaNum,isDigit,isHexDigit,chr,ord)
 import Data.Function ((&))
 import Data.Functor ((<&>))
@@ -20,14 +21,13 @@ import Data.List.NonEmpty (NonEmpty((:|)))
 import Data.Symbol (Symbol,intern)
 import Data.Text (Text)
 import Data.Void (Void)
-import Data.Zexpr (Atom(..), Zexpr(..), Combine(..))
-import Data.Zexpr (Loc(..), zexprLoc, joinLoc)
+import Data.Zexpr.Location (Loc(..))
+import Data.Zexpr.Zexpr (Atom(..), Zexpr(..), Combine(..))
 import Numeric (readHex)
 
-import qualified Data.ByteString as BS
+import qualified Data.Zexpr.Zexpr as Zexpr
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import qualified Text.Megaparsec as MP
 
 
@@ -111,33 +111,42 @@ parseLine = do
 parseCall :: Parser Zexpr
 parseCall = do
   e0 <- parseSexpr
-  suffixes <- MP.many $ MP.choice [ call, string, field ]
+  suffixes <- MP.many $ MP.choice [ call, string, dotted ]
   pure $ foldl (&) e0 suffixes
   where
   call :: Parser (Zexpr -> Zexpr)
   call = do
     args <- parseCombo
     pure $ flip go args
-      -- nil@(ZCombo loc Round []) ->
-      --   let loc' = zexprLoc e0 `joinLoc` loc
-      --    in ZCombo loc' Round [e0, nil]
     where
     go :: Zexpr -> Zexpr -> Zexpr
     go e0 nil@(ZCombo loc Round []) =
-      let loc' = zexprLoc e0 `joinLoc` loc
+      let loc' = Zexpr.loc e0 <> loc
        in ZCombo loc' Round [e0, nil]
     go e0 (ZCombo loc Round es) =
-      let loc' = zexprLoc e0 `joinLoc` loc
+      let loc' = Zexpr.loc e0 <> loc
        in ZCombo loc' Round (e0:es)
+    go e0 (ZCombo loc Square []) =
+      let loc' = Zexpr.loc e0 <> loc
+          nil = ZCombo loc Round []
+       in ZCombo loc' LensIndex (e0, nil)
+    go e0 (ZCombo loc Square [e]) =
+      let loc' = Zexpr.loc e0 <> loc
+       in ZCombo loc' LensIndex (e0, e)
     go e0 (ZCombo loc Square es) =
-      let loc' = zexprLoc e0 `joinLoc` loc
-       in ZCombo loc' LensIndex (e0, es)
+      let loc' = Zexpr.loc e0 <> loc
+          e = ZCombo loc Round es
+       in ZCombo loc' LensIndex (e0, e)
     go e0 arg@(ZCombo loc ConsDot _) =
-      let loc' = zexprLoc e0 `joinLoc` loc
+      let loc' = Zexpr.loc e0 <> loc
        in ZCombo loc' Round [e0, arg]
     go _ (ZAtom _ _) = errorWithoutStackTrace "internal error: parseCombo returned atom in parseCall"
     go _ (ZCombo _ LensField _) = errorWithoutStackTrace "internal error: parseCombo returned LensField in parseCall"
     go _ (ZCombo _ LensIndex _) = errorWithoutStackTrace "internal error: parseCombo returned LensIndex in parseCall"
+    go _ (ZCombo _ FloatLit _) = errorWithoutStackTrace "internal error: parseCombo returned FloatLit in parseCall"
+    go _ (ZCombo _ MakeInt _) = errorWithoutStackTrace "internal error: parseCombo returned MakeInt in parseCall"
+    go _ (ZCombo _ MakeFloat _) = errorWithoutStackTrace "internal error: parseCombo returned MakeFloat in parseCall"
+    go _ (ZCombo _ MakeStr _) = errorWithoutStackTrace "internal error: parseCombo returned MakeStr in parseCall"
     go _ (ZCombo _ Dollar _) = errorWithoutStackTrace "internal error: parseCombo returned Dollar in parseCall"
     go _ (ZCombo _ Tick _) = errorWithoutStackTrace "internal error: parseCombo returned Tick in parseCall"
     go _ (ZCombo _ Backtick _) = errorWithoutStackTrace "internal error: parseCombo returned Backtick in parseCall"
@@ -147,15 +156,27 @@ parseCall = do
   string = do
     (loc, str) <- withLocation dqStr
     pure $ \e0 ->
-      let loc' = zexprLoc e0 `joinLoc` loc
-       in ZCombo loc' Round [e0, ZAtom loc (Str str)]
-  field = do
-    (loc, f) <- withLocation $ do
+      let loc' = Zexpr.loc e0 <> loc
+       in ZCombo loc' MakeStr (e0, loc, str)
+  dotted = do
+    (loc, suffix) <- withLocation $ do
       void $ MP.single '.'
-      plainSym MP.<|> dqSym
-    pure $ \e0 ->
-      let loc' = zexprLoc e0 `joinLoc` loc
-       in ZCombo loc' LensField (e0, f)
+      MP.choice
+        [ Right <$> plainSym
+        , Right <$> dqSym
+        , Left <$> parseNum
+        ]
+    pure $ case suffix of
+      Right f -> \e0 ->
+        let loc' = Zexpr.loc e0 <> loc
+         in ZCombo loc' LensField (e0, loc, f)
+      Left (ZAtom _ (Int n)) -> \e0 ->
+        let loc' = Zexpr.loc e0 <> loc
+         in ZCombo loc' MakeInt (e0, loc, n)
+      Left (ZCombo _ FloatLit repr) -> \e0 ->
+        let loc' = Zexpr.loc e0 <> loc
+         in ZCombo loc' MakeFloat (e0, loc, repr)
+      Left _ -> errorWithoutStackTrace "internal error: got non-number when parsing dotted"
 
 
 
@@ -265,9 +286,17 @@ parseCombo = MP.choice
 parseAtom :: Parser Zexpr
 parseAtom = MP.choice
   [ parseSym
-  , withLocation (hexInt MP.<|> decInt) <&> \(loc, i) -> ZAtom loc (Int i)
+  , parseNum
   , withLocation dqStr <&> \(loc, s) -> ZAtom loc (Str s)
   ]
+
+parseNum :: Parser Zexpr
+parseNum = withLocation (MP.choice
+  [ Right <$> hexInt
+  , decNum
+  ]) <&> \(loc, num) -> case num of
+    Right n -> ZAtom loc (Int n)
+    Left repr -> ZCombo loc FloatLit repr
 
 parseSym :: Parser Zexpr
 parseSym = do
@@ -412,15 +441,13 @@ consDot = do
   inlineSpace
 
 plainSym :: Parser Symbol
-plainSym =
+plainSym = do
+  MP.notFollowedBy takeSign
   intern . T.unpack <$> MP.takeWhile1P (Just "symbol char") isSymChar
 
 dqSym :: Parser Symbol
 dqSym = MP.try $ do
-  bytes <- MP.try $ MP.single '\\' >> dqStr
-  str <- case T.decodeUtf8' bytes of
-    Right str -> pure str
-    Left _ -> fail "non-utf8 symbol"
+  str <- MP.try $ MP.single '\\' >> dqStr
   pure $ intern (T.unpack str)
 
 
@@ -434,18 +461,30 @@ isSymChar c
   || c `elem` ("ΓΔΘΛΞΠΣΤΥΦΨΩαβγδεζηθικλμνξοπρσςτυφχψω":: String)
   || c `elem` ("𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡" :: String)
 
-decInt :: Parser Integer
-decInt = do
+decNum :: Parser (Either (Integer, Int, Integer) Integer)
+decNum = do
   sign <- takeSign
-  predigits <- do
-    let takeDec = MP.takeWhile1P (Just "digit") isDigit
-    d0 <- takeDec
-    ds <- MP.many (MP.some (MP.single '_') >> takeDec)
-    pure $ mconcat (d0:ds)
-  let digits = (filter (/= '_') . T.unpack) predigits
-      n = read digits
-  MP.notFollowedBy (MP.optional (MP.single ':') >> MP.satisfy isSymChar)
-  pure (sign * n)
+  wholeDigits <- takeDecDigits
+  let whole = read wholeDigits
+  decimalPoint <- MP.option False $ MP.try $ do
+    _ <- MP.single '.'
+    _ <- MP.lookAhead $ MP.satisfy isDigit
+    pure True
+  num <- if not decimalPoint
+  then pure $ Right (sign * whole)
+  else do
+    fracDigits <- takeDecDigits
+    let allDigits = wholeDigits ++ fracDigits
+        sigDigits = dropTrailingZeros allDigits
+        significand = read sigDigits
+    let exponent = if significand == 0
+                   then 0
+                   else fromIntegral $ length allDigits - length sigDigits - length fracDigits
+    pure $ Left (sign * significand, 10, exponent)
+  MP.notFollowedBy (MP.satisfy isSymChar)
+  pure num
+  where
+  dropTrailingZeros = (\s -> if null s then "0" else s) . reverse . dropWhile (== '0') . reverse
 
 hexInt :: Parser Integer
 hexInt = do
@@ -473,11 +512,19 @@ takeSign = MP.try $ do
   _ <- MP.lookAhead $ MP.satisfy isDigit
   pure sign
 
-dqStr :: Parser ByteString
+-- take decimal digits, interspersed with underscores, and return just the string of all the digits
+takeDecDigits :: Parser String
+takeDecDigits = do
+  let takeDec = MP.takeWhile1P (Just "digit") isDigit
+  d0 <- takeDec
+  ds <- MP.many (MP.some (MP.single '_') >> takeDec)
+  pure $ filter (/= '_') . T.unpack $ mconcat (d0:ds)
+
+dqStr :: Parser Text
 dqStr = do
   _ <- MP.single '\"'
   sections <- MP.many $ MP.choice
-    [ T.encodeUtf8 <$> MP.takeWhile1P Nothing (`notElem` ("\\\"\n" :: String))
+    [ MP.takeWhile1P Nothing (`notElem` ("\\\"\n" :: String))
     , do
       _ <- MP.single '\\'
       MP.choice
@@ -494,13 +541,13 @@ dqStr = do
         , MP.single '\\' >> pure "\\"
         , MP.single '^' >> MP.choice
           [ MP.single '?' >> pure "\x7F"
-          , MP.satisfy (\c -> '@' <= c && c <= '_') <&> \c -> BS.singleton (fromIntegral $ ord c - ord '@')
+          , MP.satisfy (\c -> '@' <= c && c <= '_') <&> \c -> T.singleton (chr $ ord c - ord '@')
           ]
         , do
             h1 <- MP.satisfy isHexDigit
             h2 <- MP.satisfy isHexDigit
             let [(n,"")] = readHex [h1,h2]
-            pure $ BS.pack [n]
+            pure $ T.singleton (chr n)
         , do
             _ <- MP.oneOf ("uU" :: String)
             _ <- MP.single '['
@@ -509,7 +556,7 @@ dqStr = do
             when (n > 0x10FFFF) $ fail "codepoint out of range"
             _ <- MP.single ']'
             _ <- MP.single '8'
-            pure $ T.encodeUtf8 (T.pack [chr n])
+            pure $ T.singleton (chr n)
         , do
             _ <- MP.try $ MP.optional inlineSpace >> newline
             _ <- MP.optional inlineSpace >> MP.single '\\'
@@ -518,7 +565,7 @@ dqStr = do
     , do
         nl <- MP.try $ MP.optional inlineSpace >> newline
         _ <- MP.optional inlineSpace >> MP.single '\\'
-        pure $ T.encodeUtf8 nl
+        pure $ nl
     ]
   _ <- MP.single '\"'
-  pure $ BS.concat sections
+  pure $ T.concat sections
