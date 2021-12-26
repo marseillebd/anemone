@@ -53,13 +53,13 @@ defaultConf :: Conf
 defaultConf = Conf
   { operativeName = "__operate__"
   , qualifyName = "__qualName__"
-  , qualifyIsOperative = False
+  , qualifyIsOperative = True
   , squareName = "__list__"
-  , squareIsOperative = False
+  , squareIsOperative = True
   , improperListName = "__improper-list__"
-  , improperListIsOperative = False
+  , improperListIsOperative = True
   , lensFieldName = "__lensField__"
-  , lensFieldIsOperative = False
+  , lensFieldIsOperative = True
   , lensIndexName = "__lensIndex__"
   , lensIndexIsOperative = False
   , floatLiteralName = "__mkDefaultFloat__"
@@ -68,13 +68,13 @@ defaultConf = Conf
   , overloadedFloatOperativeName = Just "__mkFloat__"
   , overloadedStringOperativeName = Just "__mkString__"
   , tickName = "__quote__"
-  , tickIsOperative = False
+  , tickIsOperative = True
   , backtickName = "__quasiquote__"
-  , backtickIsOperative = False
+  , backtickIsOperative = True
   , commaName = "__unquote__"
-  , commaIsOperative = False
+  , commaIsOperative = True
   , commaAtName = "__unquote-splicing__"
-  , commaAtIsOperative = False
+  , commaAtIsOperative = True
   }
 
 

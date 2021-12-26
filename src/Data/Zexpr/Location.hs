@@ -1,6 +1,11 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Data.Zexpr.Location
   ( Loc(..)
   ) where
+
+import Control.DeepSeq (NFData)
+import GHC.Generics (Generic)
 
 data Loc
   = LocUnknown
@@ -13,7 +18,8 @@ data Loc
     , toLine :: Int
     , toCol :: Int
     }
-  deriving(Show,Eq)
+  deriving(Show,Eq,Generic)
+instance NFData Loc
 
 instance Semigroup Loc where
   l1 <> l2 = Loc

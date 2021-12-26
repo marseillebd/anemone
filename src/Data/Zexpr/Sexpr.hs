@@ -1,12 +1,20 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Data.Zexpr.Sexpr
   ( Atom(..)
   , Sexpr(..)
   , loc
   ) where
 
-import Data.Zexpr.Location (Loc(..))
-import Data.Symbol (Symbol)
+import Control.DeepSeq (NFData)
+import Data.Symbol.Unsafe (Symbol(..))
 import Data.Text (Text)
+import Data.Zexpr.Location (Loc(..))
+import GHC.Generics (Generic)
+
+deriving instance Generic Symbol
+instance NFData Symbol
 
 ------------------------------------ Atoms ------------------------------------
 
@@ -15,14 +23,16 @@ data Atom
   | Int Integer
   -- NOTE floating point is represented in the source as just (syntactic sugar for) a function call of integers
   | Str Text
-  deriving (Show,Eq)
+  deriving (Show,Eq,Generic)
+instance NFData Atom
 
 ------------------------------------ S-Expressions ------------------------------------
 
 data Sexpr
   = SAtom Loc Atom
   | SCombo Loc [Sexpr]
-  deriving (Show,Eq)
+  deriving (Show,Eq,Generic)
+instance NFData Sexpr
 
 loc :: Sexpr -> Loc
 loc (SAtom l _) = l

@@ -551,12 +551,18 @@ dqStr = do
             pure $ T.singleton (chr n)
         , do
             _ <- MP.oneOf ("uU" :: String)
-            _ <- MP.single '['
+            _ <- MP.optional $ MP.single '+'
             digits <- MP.takeWhile1P (Just "hex digit") isHexDigit
             let [(n,"")] = readHex (T.unpack digits)
             when (n > 0x10FFFF) $ fail "codepoint out of range"
-            _ <- MP.single ']'
-            _ <- MP.single '8'
+            _ <- MP.single ';'
+            pure $ T.singleton (chr n)
+        , do
+            _ <- MP.chunk "&#"
+            digits <- MP.takeWhile1P (Just "digit") isDigit
+            let n = read (T.unpack digits) :: Int
+            when (n > 0x10FFFF) $ fail "codepoint out of range"
+            _ <- MP.single ';'
             pure $ T.singleton (chr n)
         , do
             _ <- MP.try $ MP.optional inlineSpace >> newline

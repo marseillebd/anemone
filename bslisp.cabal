@@ -16,6 +16,7 @@ extra-source-files: CHANGELOG.md
 library
   hs-source-dirs: src
   exposed-modules:
+    Data.List.Reverse
     Data.Zexpr
     Data.Zexpr.Location
     Data.Zexpr.Sexpr
@@ -23,14 +24,26 @@ library
     Data.Zexpr.Text.Parser
     Data.Zexpr.Text.Render
     Data.Zexpr.Zexpr
+    Language.Bslisp.Keywords
+    Language.Bslisp.TreeWalk.Environment
+    Language.Bslisp.TreeWalk.Eval
+    Language.Bslisp.TreeWalk.Stack
+    Language.Bslisp.TreeWalk.Unsafe.Types
+    Language.Bslisp.TreeWalk.Value
   -- other-modules:
   build-depends:
     , base >=4.11.1
     , bytestring >=0.11
+    , containers >=0.6
+    , deepseq >=1.4
     , megaparsec >=0.9
     , mtl >=2.2
+    , natural-arithmetic >=0.1.2
+    , prettyprinter >=1.7
+    , strict-io >=0.2
     , symbol >=0.2
     , text >=1.2
+    , transformers >=0.5
   default-language: Haskell2010
   -- ghc-options: -O2 -Wall -Wunticked-promoted-constructors
   -- DEBUG
@@ -43,6 +56,8 @@ executable bslisp
   build-depends:
     , base
     , bslisp
+    , pretty-simple >=4.0
+    , prettyprinter
     , text
   default-language: Haskell2010
   -- ghc-options: -O2 -Wall -Wunticked-promoted-constructors -threaded
