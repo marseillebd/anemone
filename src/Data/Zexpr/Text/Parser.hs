@@ -379,9 +379,17 @@ hangingSpace = void $ MP.try $ do
 leadingWhitespace :: Maybe Char -> Parser (Int, Maybe Char)
 leadingWhitespace indTy = do
   -- skip trailing space and blank lines
-  MP.skipSome $ MP.try $ do
-    void $ MP.optional simpleSpace
-    newline
+  let loop = MP.choice
+        [ MP.try $ do
+            void $ MP.optional simpleSpace
+            _ <- newline
+            loop
+        , MP.try $ do
+            void $ MP.optional simpleSpace
+            MP.eof
+        , pure ()
+        ]
+  loop
   spaces <- case indTy of
     Nothing -> MP.takeWhileP (Just "spaces") (== ' ') MP.<|> MP.takeWhileP (Just "tabs") (== '\t')
     Just ' ' -> MP.takeWhileP (Just "spaces") (== ' ')
