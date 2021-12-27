@@ -2,13 +2,15 @@
 
 module Main (main) where
 
+import Data.Functor ((<&>))
+import Data.Symbol (intern)
 import Data.Text.Prettyprint.Doc (Doc,Pretty(pretty))
 import Data.Text.Prettyprint.Doc.Render.Text (renderIO)
 import Data.Text.Prettyprint.Doc.Util (putDocW)
 import Data.Zexpr (toSexpr,Conf(..),defaultConf)
 import Data.Zexpr.Sexpr.Text.Render (renderPretty)
 import Data.Zexpr.Text.Parser (parse,errorBundlePretty)
-import Language.Bslisp.TreeWalk.Environment (newDefaultEnv)
+import Language.Bslisp.TreeWalk.Environment (newDefaultEnv,Env(..))
 import Language.Bslisp.TreeWalk.Eval (eval)
 import Language.Bslisp.TreeWalk.Stack (makeTrace)
 import System.Exit (exitFailure)
@@ -21,10 +23,10 @@ import qualified Data.Text.Prettyprint.Doc as PP
 
 
 main :: IO ()
-main = ammoniteMain
+main = anemoneMain
 
-ammoniteMain :: IO ()
-ammoniteMain = do
+anemoneMain :: IO ()
+anemoneMain = do
   inp <- T.getContents
   vs <- case parse "<stdin>" inp of
     Left err -> do
@@ -32,7 +34,8 @@ ammoniteMain = do
       exitFailure
     Right vs -> pure vs
   ((>> putStrLn "") . putDocW 100 . renderPretty . toSexpr defaultConf) `mapM_` vs
-  newDefaultEnv >>= eval (toSexpr defaultConf <$> vs)  >>= \case
+  env0 <- newDefaultEnv <&> \e -> e{name=Just (intern "__top__")}
+  eval (toSexpr defaultConf <$> vs) env0 >>= \case
     Right v -> pPrint v
     Left exn -> do
       pPrint exn
@@ -66,6 +69,7 @@ lispConf = Conf
   , overloadedIntegerOperativeName = Just "is-int"
   , overloadedFloatOperativeName = Just "is-float"
   , overloadedStringOperativeName = Just "is-string"
+  , overloadedListOperativeName = Just "is-list"
   , tickName = "quote"
   , tickIsOperative = False
   , backtickName = "quasiquote"

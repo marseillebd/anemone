@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -23,7 +24,7 @@ import Data.List.Reverse (RList,snoc)
 import Data.Text.Prettyprint.Doc ((<+>))
 import Data.Text.Prettyprint.Doc (Pretty(..))
 import Data.Zexpr.Location (Loc(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (Callable(..),Closure(..))
+import Language.Bslisp.TreeWalk.Unsafe.Types (Callable(..),Closure(..),Env(..))
 import Language.Bslisp.TreeWalk.Unsafe.Types (PrimCaseBin(..),PrimCaseQuat(..))
 import Language.Bslisp.TreeWalk.Unsafe.Types (PrimExn(..),StackItem(..),PushPop(..))
 import Language.Bslisp.TreeWalk.Unsafe.Types (PrimOp(..),PrimAp(..))
@@ -53,18 +54,30 @@ instance Pretty Value where
   pretty (StrVal s) = PP.pretty $ Sexpr.renderString s
   pretty (SymVal x) = PP.pretty $ Sexpr.renderSymbol x
   pretty (ListVal vs) = PP.encloseSep "[" "]" ", " (pretty <$> vs)
-  pretty (LocVal l) = "loc(" <> pretty l <> ")"
+  pretty (LocVal l) = "<location " <> pretty l <> ">"
   pretty (SexprVal sexpr) = Sexpr.renderPretty sexpr
-  pretty (EnvVal env) = "<Env>" -- TODO
+  pretty (EnvVal env) = "<" <> pretty env <> ">"
   pretty (PrimOp prim) = "<" <> PP.viaShow prim <> ">"
   pretty (PrimAp prim) = "<" <> PP.viaShow prim <> ">"
   pretty (ClosureVal Closure{name,definedAt}) = "<" <> nameInfo <+> "(" <> pretty definedAt <> ")>"
     where
     nameInfo = case name of
-      Just x -> "function " <+> pretty (Sexpr.renderSymbol x)
+      Just x -> "function" <+> pretty (Sexpr.renderSymbol x)
       Nothing -> "anonymous function"
 
+instance Pretty Env where
+  pretty Env{name,createdAt} =
+    let nameInfo = case name of
+          Just x -> "environment" <+> pretty (Sexpr.renderSymbol x) <> ""
+          Nothing -> "anonymous environment"
+        locInfo = case createdAt of
+          Just loc -> (<+> "(" <> pretty loc <> ")")
+          Nothing -> id
+    in locInfo nameInfo
+
 instance Pretty Loc where
-  pretty loc =   PP.viaShow (filename loc)
-             <+>        pretty (fromLine loc) <> ":" <> pretty (fromCol loc)
-             <>  "-" <> pretty (toLine loc) <> ":" <> pretty (toCol loc)
+  pretty LocUnknown = "unknown"
+  pretty Loc{filename,fromLine,fromCol,toLine,toCol} =
+       pretty filename
+    <> ":" <> pretty fromLine <> ":" <> pretty fromCol
+    <> "-" <> (if fromLine == toLine then "" else pretty toLine <> ":") <> pretty toCol

@@ -39,6 +39,7 @@ data Conf = Conf
   , overloadedIntegerOperativeName :: Maybe String
   , overloadedFloatOperativeName :: Maybe String
   , overloadedStringOperativeName :: Maybe String
+  , overloadedListOperativeName :: Maybe String
   , tickName :: String
   , tickIsOperative :: Bool
   , backtickName :: String
@@ -67,6 +68,7 @@ defaultConf = Conf
   , overloadedIntegerOperativeName = Just "__mkInt__"
   , overloadedFloatOperativeName = Just "__mkFloat__"
   , overloadedStringOperativeName = Just "__mkString__"
+  , overloadedListOperativeName = Just "__mkList__"
   , tickName = "__quote__"
   , tickIsOperative = True
   , backtickName = "__quasiquote__"
@@ -142,6 +144,11 @@ toSexpr conf = go
      in case overloadedStringSymbol of
           Nothing -> SCombo l args
           Just sym -> SCombo l $ SAtom (loc e) (Sym sym) : args
+  go (ZCombo l MakeList (f, _, es)) =
+    let args = go f : (go <$> es)
+     in case overloadedListSymbol of
+          Nothing -> SCombo l args
+          Just sym -> SCombo l $ SAtom (loc f) (Sym sym) : args
   go (ZCombo l Tick (lT, e)) =
     let op = SAtom lT (Sym operativeSymbol)
         q = SAtom lT (Sym tickSymbol)
@@ -180,6 +187,7 @@ toSexpr conf = go
   overloadedIntegerSymbol = intern <$> (overloadedIntegerOperativeName conf)
   overloadedFloatSymbol = intern <$> (overloadedFloatOperativeName conf)
   overloadedStringSymbol = intern <$> (overloadedStringOperativeName conf)
+  overloadedListSymbol = intern <$> (overloadedListOperativeName conf)
   tickSymbol = intern (tickName conf)
   backtickSymbol = intern (backtickName conf)
   commaSymbol = intern (commaName conf)

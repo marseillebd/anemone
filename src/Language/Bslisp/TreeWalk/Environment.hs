@@ -3,7 +3,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Language.Bslisp.TreeWalk.Environment
-  ( Env
+  ( Env(..)
   , Binding(..)
   , lookup
   , define
@@ -26,15 +26,17 @@ import Language.Bslisp.TreeWalk.Value (Value(..),PrimOp(..),PrimAp(..))
 
 import qualified Data.IntMap.Strict as Map
 
-newEmptyEnv :: (MonadIO io) =>  io Env
-newEmptyEnv = do
+
+newEnv :: (MonadIO io) => Maybe Env -> io Env
+newEnv parent = do
   nsMap <- liftIO $ newIORef Map.empty
-  pure Env{parent=Nothing,namespaces=nsMap}
+  pure Env{parent,namespaces=nsMap,name=Nothing,createdAt=Nothing}
+
+newEmptyEnv :: (MonadIO io) =>  io Env
+newEmptyEnv = newEnv Nothing
 
 newChild :: (MonadIO io) => Env -> io Env
-newChild parent = do
-  nsMap <- liftIO $ newIORef Map.empty
-  pure Env{parent=Just parent,namespaces=nsMap}
+newChild = newEnv . Just
 
 newDefaultEnv :: (MonadIO io) =>  io Env
 newDefaultEnv = do

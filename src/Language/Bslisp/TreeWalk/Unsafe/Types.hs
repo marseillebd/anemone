@@ -108,6 +108,8 @@ data BsType = BsType
 data Env = Env
   { parent :: !(Maybe Env)
   , namespaces :: !(IORef (IntMap Namespace))
+  , name :: !(Maybe Symbol)
+  , createdAt :: !(Maybe Loc)
   }
   deriving (Generic)
 instance NFData Env

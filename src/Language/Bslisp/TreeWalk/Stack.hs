@@ -114,8 +114,8 @@ instance Pretty StackTrace where
           callSiteInfo = "called at" <+> pretty calledAt
           argsInfo = PP.group . PP.nest 2 . PP.vsep $ "with arguments" : fmap pretty args
        in "in" <+> nameInfo <+> defLocInfo <+> callSiteInfo <+> argsInfo
-    goItem EvalTrace{evaledAt,evalee} = PP.nest 2 . PP.vsep $
-      [ "when eval'ing" <+> "(" <> pretty evaledAt <> ") s-expr:"
+    goItem EvalTrace{evaledAt,evaleeEnv,evalee} = PP.nest 2 . PP.vsep $
+      [ "when eval'ing" <+> "(" <> pretty evaledAt <> ") in <" <> pretty evaleeEnv <> "> the s-expr:"
       , Sexpr.renderPretty evalee
       ]
     goItem PrimArgTrace{} = "in argument <> of primitive <> with arguments <>"

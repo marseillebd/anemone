@@ -57,6 +57,11 @@ adaptPos pos0 pos = Loc
 
 ------------------------------------ Grammar ------------------------------------
 
+{-
+File
+  ::= <nextline>?
+   |  <nextline>? Zexpr (<nextline> Zexpr)*
+-}
 parseFile :: Parser [Zexpr]
 parseFile = do
   _ <- MP.optional nextline
@@ -78,24 +83,54 @@ parseZexpr = withLocation parseZexprs <&> \(loc, preEs) -> case preEs of
   e :| [] -> e
   e :| es -> ZCombo loc Round (e:es)
 
+{-
+Zexpr
+  ::= '$'? LineExpr
+   |  '@' '$'? LineExpr <nextline> Zexpr
+   |  '@@' '$'? LineExpr (<nextline> Zexpr)* -- TODO
+-}
 parseZexprs :: Parser (NonEmpty Zexpr)
-parseZexprs = do
-  dollar_m <- MP.optional $ do
-    (loc, _) <- withLocation $ MP.single '$'
-    _ <- MP.optional inlineSpace
-    pure $ ZCombo loc Dollar ()
-  es <- parseLine
-  case dollar_m of
-    Nothing -> pure es
-    Just dollar -> pure (dollar :| NE.toList es)
+parseZexprs = MP.choice
+  [ do
+      void $ MP.single '@' >> MP.optional inlineSpace
+      e1 <- parseDollar
+      nextline
+      e' <- parseZexpr
+      pure $ case e1 of { (e:|es) -> e :| (es ++ [e']) }
+  , parseDollar
+  ]
+  where
+  parseDollar :: Parser (NonEmpty Zexpr)
+  parseDollar = do
+    dollar_m <- MP.optional $ do
+      (loc, _) <- withLocation $ MP.single '$'
+      _ <- MP.optional inlineSpace
+      pure $ ZCombo loc Dollar ()
+    es <- parseLine
+    case dollar_m of
+      Nothing -> pure es
+      Just dollar -> pure (dollar :| NE.toList es)
 
-
+{-
+LineExpr
+  ::= ChainExpr+
+   |  ChainExpr+ ':' Zexpr
+   |  ChainExpr+ ':' <indent> (<nextline> Zexpr)+ <dedent>
+   |  ChainExpr+ <ws> '::' <ws> Zexpr
+-}
 parseLine :: Parser (NonEmpty Zexpr)
 parseLine = do
-  e <- parseCall
-  es <- MP.many (MP.try $ inlineSpace >> parseCall)
+  lPos0 <- MP.getSourcePos
+  e <- parseChain
+  es <- MP.many (MP.try $ inlineSpace >> parseChain)
+  lLoc <- adaptPos lPos0 <$> MP.getSourcePos
   MP.choice
     [ do
+        void $ MP.try $ inlineSpace >> MP.chunk "::" >> inlineSpace
+        let eL = case es of { [] -> e ; _ -> ZCombo lLoc Round (e:es) }
+        eR <- parseZexpr
+        pure $ eL :| [eR]
+    , do
         void $ MP.try $ MP.optional inlineSpace >> MP.single ':' >> indent
         eLines <- MP.some $ nextline >> parseZexpr
         dedent
@@ -108,8 +143,18 @@ parseLine = do
     , pure (e :| es)
     ]
 
-parseCall :: Parser Zexpr
-parseCall = do
+{-
+ChainExpr
+  ::= Sexpr (<!ws> ChainSuffix)*
+ChainSuffix
+  ::= ComboExpr
+   |  '.' <!ws> Number
+   |  <!ws> <string>
+   |  '.' <!ws> <symbol>
+   |  '.' SquareCombo
+-}
+parseChain :: Parser Zexpr
+parseChain = do
   e0 <- parseSexpr
   suffixes <- MP.many $ MP.choice [ call, string, dotted ]
   pure $ foldl (&) e0 suffixes
@@ -140,47 +185,70 @@ parseCall = do
     go e0 arg@(ZCombo loc ConsDot _) =
       let loc' = Zexpr.loc e0 <> loc
        in ZCombo loc' Round [e0, arg]
-    go _ (ZAtom _ _) = errorWithoutStackTrace "internal error: parseCombo returned atom in parseCall"
-    go _ (ZCombo _ LensField _) = errorWithoutStackTrace "internal error: parseCombo returned LensField in parseCall"
-    go _ (ZCombo _ LensIndex _) = errorWithoutStackTrace "internal error: parseCombo returned LensIndex in parseCall"
-    go _ (ZCombo _ FloatLit _) = errorWithoutStackTrace "internal error: parseCombo returned FloatLit in parseCall"
-    go _ (ZCombo _ MakeInt _) = errorWithoutStackTrace "internal error: parseCombo returned MakeInt in parseCall"
-    go _ (ZCombo _ MakeFloat _) = errorWithoutStackTrace "internal error: parseCombo returned MakeFloat in parseCall"
-    go _ (ZCombo _ MakeStr _) = errorWithoutStackTrace "internal error: parseCombo returned MakeStr in parseCall"
-    go _ (ZCombo _ Dollar _) = errorWithoutStackTrace "internal error: parseCombo returned Dollar in parseCall"
-    go _ (ZCombo _ Tick _) = errorWithoutStackTrace "internal error: parseCombo returned Tick in parseCall"
-    go _ (ZCombo _ Backtick _) = errorWithoutStackTrace "internal error: parseCombo returned Backtick in parseCall"
-    go _ (ZCombo _ Comma _) = errorWithoutStackTrace "internal error: parseCombo returned Comma in parseCall"
-    go _ (ZCombo _ CommaAt _) = errorWithoutStackTrace "internal error: parseCombo returned CommaAt in parseCall"
-    go _ (ZCombo _ QualName _) = errorWithoutStackTrace "internal error: parseCombo returned QualName in parseCall"
+    go _ (ZAtom _ _) = errorWithoutStackTrace "internal error: parseCombo returned atom in parseChain"
+    go _ (ZCombo _ LensField _) = errorWithoutStackTrace "internal error: parseCombo returned LensField in parseChain"
+    go _ (ZCombo _ LensIndex _) = errorWithoutStackTrace "internal error: parseCombo returned LensIndex in parseChain"
+    go _ (ZCombo _ FloatLit _) = errorWithoutStackTrace "internal error: parseCombo returned FloatLit in parseChain"
+    go _ (ZCombo _ MakeInt _) = errorWithoutStackTrace "internal error: parseCombo returned MakeInt in parseChain"
+    go _ (ZCombo _ MakeFloat _) = errorWithoutStackTrace "internal error: parseCombo returned MakeFloat in parseChain"
+    go _ (ZCombo _ MakeStr _) = errorWithoutStackTrace "internal error: parseCombo returned MakeStr in parseChain"
+    go _ (ZCombo _ MakeList _) = errorWithoutStackTrace "internal error: parseCombo returned MakeList in parseChain"
+    go _ (ZCombo _ Dollar _) = errorWithoutStackTrace "internal error: parseCombo returned Dollar in parseChain"
+    go _ (ZCombo _ Tick _) = errorWithoutStackTrace "internal error: parseCombo returned Tick in parseChain"
+    go _ (ZCombo _ Backtick _) = errorWithoutStackTrace "internal error: parseCombo returned Backtick in parseChain"
+    go _ (ZCombo _ Comma _) = errorWithoutStackTrace "internal error: parseCombo returned Comma in parseChain"
+    go _ (ZCombo _ CommaAt _) = errorWithoutStackTrace "internal error: parseCombo returned CommaAt in parseChain"
+    go _ (ZCombo _ QualName _) = errorWithoutStackTrace "internal error: parseCombo returned QualName in parseChain"
   string = do
     (loc, str) <- withLocation dqStr
     pure $ \e0 ->
       let loc' = Zexpr.loc e0 <> loc
        in ZCombo loc' MakeStr (e0, loc, str)
   dotted = do
-    (loc, suffix) <- withLocation $ do
-      void $ MP.single '.'
-      MP.choice
-        [ Right <$> plainSym
-        , Right <$> dqSym
-        , Left <$> parseNum
-        ]
-    pure $ case suffix of
-      Right f -> \e0 ->
-        let loc' = Zexpr.loc e0 <> loc
-         in ZCombo loc' LensField (e0, loc, f)
-      Left (ZAtom _ (Int n)) -> \e0 ->
-        let loc' = Zexpr.loc e0 <> loc
-         in ZCombo loc' MakeInt (e0, loc, n)
-      Left (ZCombo _ FloatLit repr) -> \e0 ->
-        let loc' = Zexpr.loc e0 <> loc
-         in ZCombo loc' MakeFloat (e0, loc, repr)
-      Left _ -> errorWithoutStackTrace "internal error: got non-number when parsing dotted"
+    void $ MP.single '.'
+    MP.choice
+      [ do
+          (xLoc, x) <- withLocation $ plainSym MP.<|> dqSym
+          pure $ \e0 -> ZCombo (Zexpr.loc e0 <> xLoc) LensField (e0, xLoc, x)
+      , parseNum <&> \case
+          ZAtom nLoc (Int n) -> \e0 ->
+            ZCombo (Zexpr.loc e0 <> nLoc) MakeInt (e0, nLoc, n)
+          ZCombo nLoc FloatLit n -> \e0 ->
+            ZCombo (Zexpr.loc e0 <> nLoc) MakeFloat (e0, nLoc, n)
+          _ -> errorWithoutStackTrace "internal error: got non-number when parsing dotted"
+      , parseSquare <&> \case
+          ZCombo sqLoc Square (_, es) -> \e0 ->
+            ZCombo (Zexpr.loc e0 <> sqLoc) MakeList (e0, sqLoc, es)
+          _ -> errorWithoutStackTrace "internal error: got non-number when parsing dotted"
+      ]
 
+    --     [ Right <$> plainSym
+    --     , Right <$> dqSym
+    --     , Left <$> parseNum
+    --     ]
+    -- pure $ case suffix of
+    --   Right f -> \e0 ->
+    --     let loc' = Zexpr.loc e0 <> loc
+    --      in ZCombo loc' LensField (e0, loc, f)
+    --   Left (ZAtom _ (Int n)) -> \e0 ->
+    --     let loc' = Zexpr.loc e0 <> loc
+    --      in ZCombo loc' MakeInt (e0, loc, n)
+    --   Left (ZCombo _ FloatLit repr) -> \e0 ->
+    --     let loc' = Zexpr.loc e0 <> loc
+    --      in ZCombo loc' MakeFloat (e0, loc, repr)
+    --   Left _ -> errorWithoutStackTrace "internal error: got non-number when parsing dotted"
 
-
-
+{-
+Sexpr
+  ::= AtomExpr
+   |  ComboExpr
+   |  Quote <!ws> ChainExpr
+Quote
+  ::= '\''
+   | '`'
+   | ','
+   | ',@'
+-}
 parseSexpr :: Parser Zexpr
 parseSexpr = MP.choice
   [ parseAtom
@@ -188,7 +256,7 @@ parseSexpr = MP.choice
   , do
       pos0 <- MP.getSourcePos
       (qLoc, quoteful) <- parseQuotey
-      e <- parseCall
+      e <- parseChain
       pos <- MP.getSourcePos
       let loc = adaptPos pos0 pos
       pure $ ZCombo loc quoteful (qLoc, e)
@@ -202,88 +270,107 @@ parseSexpr = MP.choice
     , MP.single ',' >> pure Comma
     ]
 
+{-
+ComboExpr ::= RoundCombo | SquareCombo | CurlyCombo
+RoundCombo
+  ::= '(' ')'
+   |  '(' Zexpr (',' <ws> Zexpr)* ')'
+   |  '(' Zexpr <ws> '.' <ws> Zexpr ')'
+SquareCombo
+  ::= '[' ']'
+   |  '[' Zexpr (',' <ws> Zexpr)* ']'
+CurlyCombo
+  ::= '{' ChainExpr* '}'
+-}
 parseCombo :: Parser Zexpr
 parseCombo = MP.choice
-  [ round
-  , square
-  , withLocation curly <&> \(loc, es) -> case es of
+  [ parseRound
+  , parseSquare
+  , withLocation parseCurly <&> \(loc, es) -> case es of
       [] -> ZCombo loc Round []
       [e] -> ZCombo loc Round [e]
       (eL : eF : esR) -> ZCombo loc Round (eF : eL : esR)
   ]
-  where
-  round :: Parser Zexpr
-  round = do
-    pos0 <- MP.getSourcePos
-    _ <- openRound >> MP.optional inlineSpace
-    let end = MP.try (MP.optional inlineSpace >> closeRound)
-    MP.choice
-      [ do
-          end
-          loc <- adaptPos pos0 <$> MP.getSourcePos
-          pure $ ZCombo loc Round []
-      , do
-          (loc0, es) <- withLocation (NE.toList <$> parseZexprs)
-          MP.choice
-            [ do
-                (dotLoc, _) <- withLocation consDot
-                e' <- parseZexpr
-                end
-                loc <- adaptPos pos0 <$> MP.getSourcePos
-                pure $ ZCombo loc ConsDot (es, dotLoc, e')
-            , do
-                let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Round es }
-                es' <- MP.some (comma >> parseZexpr)
-                end
-                loc <- adaptPos pos0 <$> MP.getSourcePos
-                pure $ ZCombo loc Round (e0:es')
-            , do
-                end
-                loc <- adaptPos pos0 <$> MP.getSourcePos
-                pure $ ZCombo loc Round es
-            ]
-      ]
-  square :: Parser Zexpr
-  square = do
-    pos0 <- MP.getSourcePos
-    (sqLoc, _) <- withLocation openSquare <* MP.optional inlineSpace
-    let end = MP.try (MP.optional inlineSpace >> closeSquare)
-    MP.choice
-      [ do
-          end
-          loc <- adaptPos pos0 <$> MP.getSourcePos
-          pure $ ZCombo loc Square (sqLoc, [])
-      , do
-          (loc0, es) <- withLocation (NE.toList <$> parseZexprs)
-          MP.choice
-            [ do
-              let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Square (sqLoc, es) }
+
+parseRound :: Parser Zexpr
+parseRound = do
+  pos0 <- MP.getSourcePos
+  _ <- openRound >> MP.optional inlineSpace
+  let end = MP.try (MP.optional inlineSpace >> closeRound)
+  MP.choice
+    [ do
+        end
+        loc <- adaptPos pos0 <$> MP.getSourcePos
+        pure $ ZCombo loc Round []
+    , do
+        (loc0, es) <- withLocation (NE.toList <$> parseZexprs)
+        MP.choice
+          [ do
+              (dotLoc, _) <- withLocation consDot
+              e' <- parseZexpr
+              end
+              loc <- adaptPos pos0 <$> MP.getSourcePos
+              pure $ ZCombo loc ConsDot (es, dotLoc, e')
+          , do
+              let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Round es }
               es' <- MP.some (comma >> parseZexpr)
               end
               loc <- adaptPos pos0 <$> MP.getSourcePos
-              pure $ ZCombo loc Square (sqLoc, e0:es')
-            , do
-                end
-                loc <- adaptPos pos0 <$> MP.getSourcePos
-                pure $ ZCombo loc Square (sqLoc, es)
-            ]
-      ]
-  curly :: Parser [Zexpr]
-  curly = do
-    openCurly
-    void $ MP.optional inlineSpace
-    es <- MP.choice
-      [ do
-          e <- parseCall
-          es <- MP.many (inlineSpace >> parseCall)
-          pure (e:es)
-      , pure []
-      ]
-    void $ MP.optional inlineSpace
-    closeCurly
-    pure es
+              pure $ ZCombo loc Round (e0:es')
+          , do
+              end
+              loc <- adaptPos pos0 <$> MP.getSourcePos
+              pure $ ZCombo loc Round es
+          ]
+    ]
 
+parseSquare :: Parser Zexpr
+parseSquare = do
+  pos0 <- MP.getSourcePos
+  (sqLoc, _) <- withLocation openSquare <* MP.optional inlineSpace
+  let end = MP.try (MP.optional inlineSpace >> closeSquare)
+  MP.choice
+    [ do
+        end
+        loc <- adaptPos pos0 <$> MP.getSourcePos
+        pure $ ZCombo loc Square (sqLoc, [])
+    , do
+        (loc0, es) <- withLocation (NE.toList <$> parseZexprs)
+        MP.choice
+          [ do
+            let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Square (sqLoc, es) }
+            es' <- MP.some (comma >> parseZexpr)
+            end
+            loc <- adaptPos pos0 <$> MP.getSourcePos
+            pure $ ZCombo loc Square (sqLoc, e0:es')
+          , do
+              end
+              loc <- adaptPos pos0 <$> MP.getSourcePos
+              pure $ ZCombo loc Square (sqLoc, es)
+          ]
+    ]
 
+parseCurly :: Parser [Zexpr]
+parseCurly = do
+  openCurly
+  void $ MP.optional inlineSpace
+  es <- MP.choice
+    [ do
+        e <- parseChain
+        es <- MP.many (inlineSpace >> parseChain)
+        pure (e:es)
+    , pure []
+    ]
+  void $ MP.optional inlineSpace
+  closeCurly
+  pure es
+
+{-
+AtomExpr
+  ::= Number
+   |  <string>
+   |  <symbol> | '\\' <!ws> <string>
+-}
 parseAtom :: Parser Zexpr
 parseAtom = MP.choice
   [ parseSym
@@ -291,6 +378,9 @@ parseAtom = MP.choice
   , withLocation dqStr <&> \(loc, s) -> ZAtom loc (Str s)
   ]
 
+{-
+Number ::= <int> | <float>
+-}
 parseNum :: Parser Zexpr
 parseNum = withLocation (MP.choice
   [ Right <$> hexInt

@@ -27,6 +27,7 @@ crapDisplay (ZCombo _ FloatLit (sig, 10, exp)) = concat [show sig, "e", show exp
 crapDisplay (ZCombo _ MakeInt (e, _, n)) = concat [crapDisplay e, ".", show n]
 crapDisplay (ZCombo _ MakeFloat (e, _, (sig, 10, exp))) = concat [crapDisplay e, ".", show sig, "e", show exp]
 crapDisplay (ZCombo _ MakeStr (e, _, s)) = concat [crapDisplay e, show $ T.unpack s]
+crapDisplay (ZCombo _ MakeList (e, _, es)) = concat [crapDisplay e, ".[", intercalate " " (crapDisplay <$> es), "]"]
 crapDisplay (ZCombo _ Dollar ()) = "$"
 crapDisplay (ZCombo _ Tick (_, e)) = concat ["'", crapDisplay e]
 crapDisplay (ZCombo _ Backtick (_, e)) = concat ["`", crapDisplay e]

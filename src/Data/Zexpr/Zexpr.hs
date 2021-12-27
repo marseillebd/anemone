@@ -28,6 +28,7 @@ data Combine subexpr where
   MakeInt :: Combine (Zexpr, Loc, Integer)
   MakeFloat :: Combine (Zexpr, Loc, (Integer, Int, Integer))
   MakeStr :: Combine (Zexpr, Loc, Text)
+  MakeList :: Combine (Zexpr, Loc, [Zexpr])
   Tick :: Combine (Loc, Zexpr)
   Backtick :: Combine (Loc, Zexpr)
   Comma :: Combine (Loc, Zexpr)
