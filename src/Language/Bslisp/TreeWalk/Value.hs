@@ -7,6 +7,7 @@
 module Language.Bslisp.TreeWalk.Value
   ( Value(..)
   , Callable(..)
+  , Laziness(..)
   , toCallable
   , Closure(..)
   , PrimOp(..)
@@ -15,16 +16,19 @@ module Language.Bslisp.TreeWalk.Value
   , PrimBin(..)
   , PrimCaseBin(..)
   , PrimCaseQuat(..)
+  , Thunk(..)
   , Control(..)
   , capture
   , PrimExn(..)
   ) where
 
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Reverse (RList,snoc)
 import Data.Text.Prettyprint.Doc ((<+>))
 import Data.Text.Prettyprint.Doc (Pretty(..))
 import Data.Zexpr.Location (Loc(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (Callable(..),Closure(..),Env(..))
+import Language.Bslisp.TreeWalk.Unsafe.Types (Callable(..),Closure(..),Laziness(..))
+import Language.Bslisp.TreeWalk.Unsafe.Types (Thunk(..),Env(..))
 import Language.Bslisp.TreeWalk.Unsafe.Types (PrimCaseBin(..),PrimCaseQuat(..))
 import Language.Bslisp.TreeWalk.Unsafe.Types (PrimExn(..),StackItem(..),PushPop(..))
 import Language.Bslisp.TreeWalk.Unsafe.Types (PrimOp(..),PrimAp(..))
@@ -34,10 +38,11 @@ import Language.Bslisp.TreeWalk.Unsafe.Types (Value(..))
 import qualified Data.Text.Prettyprint.Doc as PP
 import qualified Data.Zexpr.Sexpr.Text.Render as Sexpr
 
-toCallable :: Value -> Maybe Callable
-toCallable (PrimOp f) = Just (OperPrim f)
-toCallable (PrimAp f) = Just (CallPrim f)
-toCallable (ClosureVal f) = Just (CallClosure f)
+toCallable :: Value -> Maybe (Laziness, Callable)
+toCallable (PrimOp f) = Just (Strict, OperPrim f)
+toCallable (PrimAp f) = Just (Strict, CallPrim f)
+toCallable (ClosureVal f@Closure{params=(laziness,_):|_}) =
+  Just (laziness, CallClosure f)
 toCallable _ = Nothing
 
 capture :: Control -> StackItem 'Push -> Control
@@ -64,6 +69,7 @@ instance Pretty Value where
     nameInfo = case name of
       Just x -> "function" <+> pretty (Sexpr.renderSymbol x)
       Nothing -> "anonymous function"
+  pretty (ThunkVal Thunk{suspendedAt}) = "<thunk (" <> pretty suspendedAt <> ")>" 
 
 instance Pretty Env where
   pretty Env{name,createdAt} =

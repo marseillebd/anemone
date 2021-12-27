@@ -38,7 +38,7 @@ anemoneMain = do
   eval (toSexpr defaultConf <$> vs) env0 >>= \case
     Right v -> pPrint v
     Left exn -> do
-      pPrint exn
+      -- pPrint exn
       hPutPrettyLn stderr $ makeTrace exn
       exitFailure
 

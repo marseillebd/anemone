@@ -11,6 +11,7 @@ module Language.Bslisp.TreeWalk.Unsafe.Types
   -- * Functions
   , Callable(..)
   , Closure(..)
+  , Laziness(..)
   -- * Runtime System
   , Sexpr(..)
   , Atom(..)
@@ -26,6 +27,8 @@ module Language.Bslisp.TreeWalk.Unsafe.Types
   , Env(..)
   , Namespace(..)
   , Binding(..)
+  -- * Thunks
+  , Thunk(..)
   -- * Continuations
   , PushPop(..)
   , StackItem(..)
@@ -63,6 +66,7 @@ data Value
   | PrimOp !PrimOp
   | PrimAp !PrimAp
   | ClosureVal !Closure
+  | ThunkVal !Thunk
   | PrimExn !PrimExn
   -- TODO Thunk
   -- TODO ADTs/user-defined types, wrapped types (i.e. as close as I can get to Haskell newtype)
@@ -83,12 +87,16 @@ data Closure = Closure
   { name :: !(Maybe Symbol)
   , definedAt :: !Loc
   , scope :: !Env
-  , args :: !(RList (Symbol, Value))
-  , params :: !(NonEmpty Symbol)
+  , args :: !(RList ((Laziness, Symbol), Value))
+  , params :: !(NonEmpty (Laziness, Symbol))
   , body :: !Sexpr
   }
   deriving(Show,Generic)
 instance NFData Closure
+
+data Laziness = Strict | Lazy
+  deriving(Show,Generic)
+instance NFData Laziness
 
 ------------------------------------ Abstract Data Types ------------------------------------
 
@@ -102,6 +110,17 @@ data BsType = BsType
   -- TODO probably methods, and who knows what else
   }
   deriving (Show)
+
+------------------------------------ Thunks ------------------------------------
+
+data Thunk = Thunk
+  { cell :: !(IORef (Either (Env, Sexpr) Value))
+  , suspendedAt :: !Loc
+  }
+  deriving(Generic)
+instance NFData Thunk
+instance Show Thunk where
+  show _ = "<Thunk>"
 
 ------------------------------------ Environments ------------------------------------
 
@@ -130,7 +149,6 @@ data Binding = Bound
   deriving (Generic)
 instance NFData Binding
 
-
 ------------------------------------ Primitive Applicatives/Operatives/Exceptions ------------------------------------
 
 data PrimOp
@@ -148,6 +166,7 @@ data PrimAp
   | PrimDefineIn3 Env
   | PrimDefineIn2 Env Symbol
   | PrimDefineIn1 Env Symbol Symbol
+  | PrimForce
   | PrimUnary PrimUnary
   | PrimBin PrimBin
   | PrimBin1 PrimBin Value
@@ -260,6 +279,12 @@ data ReturnFrom
     , evaleeEnv :: !Env
     , evalee :: !Sexpr
     }
+  | FromThunk
+    { cell :: !Thunk
+    , forcedAt :: !Loc
+    , thunkeeEnv :: !Env
+    , thunkee :: !Sexpr
+    }
   deriving (Show)
 
 data StackTrace = StackTrace (RList TraceItem) PrimExn
@@ -276,6 +301,12 @@ data TraceItem
     , evaledAt :: !Loc
     , evaleeEnv :: !Env
     , evalee :: !Sexpr
+    }
+  | ThunkTrace
+    { forcerEnv :: !Env
+    , forcedAt :: !Loc
+    , thunkeeEnv :: !Env
+    , thunkee :: !Sexpr
     }
   | PrimArgTrace Int PrimAp (NonEmpty Value)
   deriving (Show)

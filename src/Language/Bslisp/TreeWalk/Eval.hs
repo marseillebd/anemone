@@ -15,7 +15,9 @@ module Language.Bslisp.TreeWalk.Eval
 
 import Control.DeepSeq (force)
 import Control.Monad (forM_)
+import Control.Monad.IO.Class (liftIO)
 import Data.Functor ((<&>))
+import Data.IORef (newIORef,readIORef,writeIORef)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Reverse (RList,snoc)
 import Data.Symbol (intern,unintern)
@@ -31,11 +33,12 @@ import Language.Bslisp.TreeWalk.Value (Control(..),capture,PrimExn(..))
 import Language.Bslisp.TreeWalk.Value (PrimCaseBin(..),PrimCaseQuat(..))
 import Language.Bslisp.TreeWalk.Value (PrimOp(..),PrimAp(..))
 import Language.Bslisp.TreeWalk.Value (PrimUnary(..),PrimBin(..))
-import Language.Bslisp.TreeWalk.Value (Value(..),Callable(..),toCallable,Closure(..))
+import Language.Bslisp.TreeWalk.Value (Value(..),Callable(..),toCallable,Closure(..),Laziness(..),Thunk(..))
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.List.Reverse as R
 import qualified Data.Text as T
+import qualified Data.Zexpr.Sexpr as Sexpr
 import qualified Language.Bslisp.Keywords as Keyword
 import qualified Language.Bslisp.TreeWalk.Environment as Env
 import qualified Language.Bslisp.TreeWalk.Stack as Stack
@@ -61,7 +64,7 @@ elaborate = \case
     env0 <- currentEnv
     Env.lookup env0 valueNamespace x >>= \case
       Just Bound{value} -> val value
-      Nothing -> ctrl $ PrimCtrl R.nil (ScopeExn loc valueNamespace x)
+      Nothing -> ctrl $ PrimCtrl R.nil $ ScopeExn loc valueNamespace x
   SCombo _ [] -> val NilVal
   SCombo loc combo@(SAtom _ (Sym x) : es)
     | x == Keyword.operate -> case es of
@@ -77,17 +80,33 @@ elaborate = \case
 reduce :: StackItem 'Pop -> Either Control Value -> Eval (Either Control Value)
 reduce k (Right v) = case k of
   Operate loc sexprs -> case toCallable v of
-    Just f -> currentEnv >>= \inEnv -> operate k f inEnv loc sexprs
+    Just (_, f) -> currentEnv >>= \inEnv -> operate k f inEnv loc sexprs
     Nothing -> raise PrimCtrl k (UncallableExn v)
   Args calledAt (arg:|args) -> case toCallable v of
-    Just f -> do
+    Just (Strict, f) -> do
       push $ Apply calledAt f args
       elaborate arg
+    Just (Lazy, f) -> do
+      push $ Apply calledAt f args
+      env0 <- currentEnv
+      let mkThunk = do
+            cell <- liftIO . newIORef $ Left (env0, arg)
+            pure $ ThunkVal Thunk{cell,suspendedAt=Sexpr.loc arg}
+      thunk <- case arg of
+        SAtom _ (Sym x) -> Env.lookup env0 valueNamespace x >>= \case
+          Just Bound{value} -> pure value
+          Nothing -> mkThunk
+        _ -> mkThunk
+      val thunk
     Nothing -> raise PrimCtrl k (UncallableExn v)
   ArgVal calledAt arg -> case toCallable v of
-    Just f -> apply k calledAt f arg
+    Just (_, f) -> apply k calledAt f arg
     Nothing -> raise PrimCtrl k (UncallableExn v)
   Apply1 calledAt f -> apply k calledAt f v
+  Restore FromThunk{cell=Thunk{cell}} env0 -> do
+    liftIO $ writeIORef cell (Right v)
+    returnToEnv env0
+    val v
   Restore _ env0 -> do
     returnToEnv env0
     val v
@@ -129,6 +148,19 @@ apply _ _ (CallPrim (PrimDefineIn2 inEnv ns)) c = case c of
 apply _ _ (CallPrim (PrimDefineIn1 inEnv ns x)) v = do
   Env.define inEnv ns x v
   val v
+apply _ forcedAt (CallPrim PrimForce) v = case v of
+  ThunkVal thunk@Thunk{cell} -> liftIO (readIORef cell) >>= \case
+    Left (thunkeeEnv, thunkee) -> do
+      let trace = FromThunk
+            { cell = thunk
+            , forcedAt
+            , thunkeeEnv
+            , thunkee
+            }
+      enterEnv trace thunkeeEnv
+      elaborate thunkee
+    Right forced -> val forced
+  _ -> val v
 apply _ _ (CallPrim (PrimUnary prim)) a = case evalPrimUnary prim a of
   Right v -> val v
   Left exn -> raisePrimArg 1 (PrimUnary prim) (a:|[]) exn
@@ -153,7 +185,7 @@ apply _ calledAt (CallClosure f@Closure{scope,args,params,body}) arg = case para
           (a:as) -> a :| (as ++ NE.toList params)
         callee = f{args=R.nil,params=params0} :: Closure -- a version of the closure with arguments/parameters reset
     calleeEnv <- Env.newChild scope <&> \env -> env{createdAt=Just calledAt}
-    forM_ args' $ \(x, v) -> Env.define calleeEnv valueNamespace x v
+    forM_ args' $ \((_, x), v) -> Env.define calleeEnv valueNamespace x v
     let trace = FromCall
           { calledAt
           , callee
@@ -190,7 +222,12 @@ operate _ (OperPrim PrimLambda) env loc sexprs = case sexprs of
     go [] = Nothing
     go [param] = go1 param <&> (:|[])
     go (param:rest) = NE.cons <$> go1 param <*> go rest
-    go1 (SAtom _ (Sym x)) = Just x
+    go1 (SAtom _ (Sym x)) = Just (Strict, x)
+    go1 (SCombo _ [SAtom _ (Sym laziness), SAtom _ (Sym x)])
+      -- TODO | laziness == intern "!" = Just (Strict, x) -- actually, bang should probably force any incoming thunks automatically
+      -- however, this need not be a feature of the core, but can be implemented in anemone itself
+      | laziness == intern "~" = Just (Lazy, x)
+      | otherwise = Nothing
     go1 _ = Nothing
 operate _ (OperPrim PrimSequence) _ loc sexprs = case sexprs of
   [] -> ctrl $ PrimCtrl R.nil $ SyntaxExn (SCombo loc sexprs) "expecting one or more statements"
@@ -250,7 +287,6 @@ evalPrimUnary PrimSymIntro (StrVal s) = Right $ SymVal (intern $ T.unpack s)
 evalPrimUnary PrimSymIntro v = Left $ TypeError v
 evalPrimUnary PrimSymElim (SymVal x) = Right $ StrVal (T.pack $ unintern x)
 evalPrimUnary PrimSymElim v = Left $ TypeError v
-
 
 evalPrimBin :: PrimBin -> Value -> Value -> Either (Int, PrimExn) Value
 evalPrimBin PrimAdd (IntVal a) (IntVal b) = Right $ IntVal (a + b)

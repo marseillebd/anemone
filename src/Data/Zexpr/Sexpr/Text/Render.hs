@@ -87,6 +87,7 @@ renderString (T.unpack -> str) = concat ["\"", concatMap go str, "\""]
   go c = concat ["\\U+", showHex (ord c) "", ";"]
 
 renderSymbol :: Symbol -> String
-renderSymbol x =
-  let name = unintern x
-   in if all isSymChar name then name else '\\':renderString (T.pack name)
+renderSymbol x = case unintern x of
+  "" -> "\\\"\""
+  name | all isSymChar name -> name
+       | otherwise -> '\\':renderString (T.pack name)

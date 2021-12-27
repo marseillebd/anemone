@@ -49,6 +49,7 @@ newDefaultEnv = do
     -- core features
     [ ("__lambda__", PrimOp PrimLambda)
     , ("__eval__", PrimAp PrimEval)
+    , ("__force__", PrimAp PrimForce)
     -- sequential programming
     , ("__sequence__", PrimOp PrimSequence)
     , ("__define-in__", PrimAp PrimDefineIn)

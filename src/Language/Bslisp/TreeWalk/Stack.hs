@@ -28,6 +28,7 @@ import Language.Bslisp.TreeWalk.Value (Control(..))
 
 import qualified Data.List.Reverse as RList
 import qualified Data.Text.Prettyprint.Doc as PP
+import qualified Data.Zexpr.Sexpr as Sexpr
 import qualified Data.Zexpr.Sexpr.Text.Render as Sexpr
 
 newtype Stack = Stack [StackItem 'Push]
@@ -97,6 +98,12 @@ makeTrace (PrimCtrl stack exn) = StackTrace (RList.catMaybes $ go <$> stack) exn
       , evaleeEnv
       , evalee
       }
+    FromThunk{forcedAt,thunkeeEnv,thunkee} -> ThunkTrace
+      { forcerEnv = env
+      , forcedAt
+      , thunkeeEnv
+      , thunkee
+      }
   go (Sequence _) = Nothing
   go (Then _) = Nothing
   go (OpDefine _ _ _) = Nothing
@@ -118,4 +125,7 @@ instance Pretty StackTrace where
       [ "when eval'ing" <+> "(" <> pretty evaledAt <> ") in <" <> pretty evaleeEnv <> "> the s-expr:"
       , Sexpr.renderPretty evalee
       ]
+    goItem ThunkTrace{forcedAt,thunkee} =
+      let header = "while forcing thunk (" <> pretty forcedAt <> ") suspended from " <> pretty (Sexpr.loc thunkee)
+       in header <> PP.hardline <> PP.indent 2 (Sexpr.renderPretty thunkee)
     goItem PrimArgTrace{} = "in argument <> of primitive <> with arguments <>"
