@@ -29,6 +29,7 @@ library
     Language.Bslisp.TreeWalk.Eval
     Language.Bslisp.TreeWalk.Machine
     Language.Bslisp.TreeWalk.Stack
+    Language.Bslisp.TreeWalk.Type
     Language.Bslisp.TreeWalk.Unsafe.Types
     Language.Bslisp.TreeWalk.Value
   -- other-modules:

@@ -34,17 +34,17 @@ renderPretty = group . go
   where
   go (SAtom _ a) = pretty $ renderAtom a
   go (SCombo _ es) = funtime es
-  standard [] = "()"
-  standard [e] = "(" <> group (renderPretty e) <> ")"
-  standard (e:es) =
-    let inline = PP.encloseSep "" "" PP.space (renderPretty <$> es)
-        multiline = vsep (group . renderPretty <$> es)
-     in "(" <> group (renderPretty e) <+> align (flatAlt multiline inline) <> ")"
-  miser [] = "()"
-  miser es =
-    let inline = PP.encloseSep "(" ")" PP.space (renderPretty <$> es)
-        multiline = vsep (group . renderPretty <$> es)
-     in "(" <> align (flatAlt multiline inline) <> ")"
+  -- standard [] = "()"
+  -- standard [e] = "(" <> group (renderPretty e) <> ")"
+  -- standard (e:es) =
+  --   let inline = PP.encloseSep "" "" PP.space (renderPretty <$> es)
+  --       multiline = vsep (group . renderPretty <$> es)
+  --    in "(" <> group (renderPretty e) <+> align (flatAlt multiline inline) <> ")"
+  -- miser [] = "()"
+  -- miser es =
+  --   let inline = PP.encloseSep "(" ")" PP.space (renderPretty <$> es)
+  --       multiline = vsep (group . renderPretty <$> es)
+  --    in "(" <> align (flatAlt multiline inline) <> ")"
   funtime :: [Sexpr] -> Doc ann
   funtime [] = "()"
   funtime [e] = "(" <> group (renderPretty e) <> ")"
@@ -57,12 +57,12 @@ renderPretty = group . go
           [] -> lineone
           _ -> lineone <> nest 2 (PP.hardline <> combolines)
      in "(" <> flatAlt multiline inline <> ")"
-  takeLastCombos = comboLoop [] [] . reverse
+  takeLastCombos = comboLoop [] . reverse
     where
-    comboLoop [] combos [] = ([], combos)
-    comboLoop [] combos (e:rest) = case e of
+    comboLoop combos [] = ([], combos)
+    comboLoop combos (e:rest) = case e of
       SAtom _ _ -> (reverse (e:rest), combos)
-      SCombo _ _ -> comboLoop [] (e:combos) rest
+      SCombo _ _ -> comboLoop (e:combos) rest
 
 renderAtom :: Atom -> String
 renderAtom (Int n) = show n

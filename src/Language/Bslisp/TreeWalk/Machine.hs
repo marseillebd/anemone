@@ -21,13 +21,16 @@ module Language.Bslisp.TreeWalk.Machine
   , currentEnv
   , enterEnv
   , returnToEnv
+  , newTypeId
   ) where
 
 
-import Control.Monad.IO.Class (MonadIO)
+import Control.Concurrent.MVar (MVar,newMVar,modifyMVar)
+import Control.Monad.IO.Class (MonadIO,liftIO)
 import Control.Monad.Trans.State.Strict (StateT,gets,modify',state,runStateT)
 import Data.Bifunctor (second)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Word (Word64)
 import Language.Bslisp.TreeWalk.Environment (Env)
 import Language.Bslisp.TreeWalk.Stack (Stack,StackItem(..),PushPop(..),ReturnFrom(..))
 import Language.Bslisp.TreeWalk.Value (Control)
@@ -43,14 +46,21 @@ runEval :: Env -> Eval a -> IO a
 runEval env action = fst <$> execEval env action
 
 execEval :: Env -> Eval a -> IO (a, Machine)
-execEval env action = runStateT (unEval action) m0
+execEval env action = runStateT (unEval action) =<< m0
   where
-  m0 = M{stack=Stack.empty,env}
+  m0 = do
+    typeIdSupply <- newMVar 1
+    pure M
+      { stack=Stack.empty
+      , env
+      , typeIdSupply
+      }
 
 
 data Machine = M
   { stack :: !Stack
   , env :: !Env
+  , typeIdSupply :: !(MVar Word64)
   }
 
 val :: Value -> Eval (Either Control Value)
@@ -68,24 +78,25 @@ pop = Eval $ state $ \st@M{stack} ->
   second (\stack' -> st{stack=stack'}) (Stack.pop stack)
 
 remergePop :: StackItem 'Pop -> Eval (StackItem 'Push)
-remergePop (Operate loc sexprs) = pure $ Operate loc sexprs
-remergePop (Args loc args) = pure $ Args loc args
-remergePop (ArgVal loc v) = unsafePop >>= \case
-  Just (ArgVals _ vs) -> pure $ ArgVals loc (v:|NE.toList vs)
-  Just k -> push k >> pure (ArgVals  loc (v:|[]))
-  Nothing -> pure $ ArgVals loc (v:|[])
-remergePop (Apply1 loc f) = unsafePop >>= \case
-  Just (Apply _ _ args) -> pure $ Apply loc f args
-  Just k -> push k >> pure (Apply loc f [])
-  Nothing -> pure $ Apply loc f []
+remergePop (Operate invokedAt loc sexprs) = pure $ Operate invokedAt loc sexprs
+remergePop (Args loc fLoc args) = pure $ Args loc fLoc args
+remergePop (ArgVal loc fLoc v) = unsafePop >>= \case
+  Just (ArgVals _ _ vs) -> pure $ ArgVals loc fLoc (v:|NE.toList vs)
+  Just k -> push k >> pure (ArgVals loc fLoc (v:|[]))
+  Nothing -> pure $ ArgVals loc fLoc (v:|[])
+remergePop (Apply1 loc f argLoc) = unsafePop >>= \case
+  Just (Apply _ _ _ args) -> pure $ Apply loc f argLoc args
+  Just k -> push k >> pure (Apply loc f argLoc [])
+  Nothing -> pure $ Apply loc f argLoc []
 remergePop (Restore from env) = pure $ Restore from env
-remergePop (Then stmt) = unsafePop >>= \case
-  Just (Sequence stmts) -> pure $ Sequence (stmt:|NE.toList stmts)
-  Just k -> push k >> pure (Sequence (stmt :| []))
-  Nothing -> pure $ Sequence (stmt :| [])
-remergePop (OpDefine env loc x) = pure $ OpDefine env loc x
-remergePop (OpList vs sexprs) = pure $ OpList vs sexprs
-remergePop (PrimArg n f vs) = pure $ PrimArg n f vs
+remergePop (Then stmtLoc stmt) = unsafePop >>= \case
+  Just (Sequence _ stmts) -> pure $ Sequence stmtLoc (stmt:|NE.toList stmts)
+  Just k -> push k >> pure (Sequence stmtLoc (stmt :| []))
+  Nothing -> pure $ Sequence stmtLoc (stmt :| [])
+remergePop (Cond pLoc c arcs) = pure $ Cond pLoc c arcs
+remergePop (OpDefine env loc x bodyLoc) = pure $ OpDefine env loc x bodyLoc
+remergePop (OpList vs itemLoc sexprs) = pure $ OpList vs itemLoc sexprs
+remergePop (PrimArg n calledAt f vs) = pure $ PrimArg n calledAt f vs
 
 
 
@@ -105,3 +116,8 @@ enterEnv trace env' = Eval $ do
 returnToEnv :: Env -> Eval ()
 returnToEnv env0 = Eval $ do
   modify' $ \st ->st{env=env0}
+
+newTypeId :: Eval Word64
+newTypeId = Eval $ do
+  supply <- gets typeIdSupply
+  liftIO . modifyMVar supply $ \n -> pure (n + 1, n)

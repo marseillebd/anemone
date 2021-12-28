@@ -15,7 +15,9 @@ module Language.Bslisp.TreeWalk.Unsafe.Types
   -- * Runtime System
   , Sexpr(..)
   , Atom(..)
-  , BsType(..)
+  , AType(..)
+  , ATypeInfo(..)
+  , PrimType(..)
   , PrimOp(..)
   , PrimAp(..)
   , PrimUnary(..)
@@ -53,6 +55,7 @@ import GHC.Generics (Generic)
 
 data Value
   = NilVal
+  | BoolVal !Bool
   | IntVal !Integer
   -- TODO other low-level numerical types
   | StrVal !Text
@@ -62,6 +65,7 @@ data Value
   | ListVal [Value]
   | LocVal !Loc
   | SexprVal !Sexpr
+  | TypeVal !AType
   | EnvVal !Env
   | PrimOp !PrimOp
   | PrimAp !PrimAp
@@ -105,11 +109,22 @@ instance NFData Laziness
 
 ------------------------------------ Types ------------------------------------
 
-data BsType = BsType
-  { qualName :: [Symbol] -- FIXME I should define an FQName type around lists of symbols
-  -- TODO probably methods, and who knows what else
+data AType = AType
+  { info :: !ATypeInfo -- this determines the identity of a type
+  -- , name :: !Symbol -- FIXME I should define an FQName type around lists of symbols
+  -- , definedAt :: !Loc -- TODO
   }
-  deriving (Show)
+  deriving (Show,Generic)
+instance NFData AType
+
+data ATypeInfo
+  = PrimType !PrimType
+  | UnionTy [AType]
+  -- TODO quantified types, type variables
+  -- TODO more structural types
+  | UserType -- TODO I need a lot more inf ohere (a unique id, callability, parameters/arguments, fields, &c)
+  deriving (Show,Generic)
+instance NFData ATypeInfo
 
 ------------------------------------ Thunks ------------------------------------
 
@@ -149,35 +164,36 @@ data Binding = Bound
   deriving (Generic)
 instance NFData Binding
 
------------------------------------- Primitive Applicatives/Operatives/Exceptions ------------------------------------
+------------------------------------ Primitive Applicatives/Operatives/Exceptions/Types ------------------------------------
 
 data PrimOp
   = PrimLambda
   | PrimSequence
   | PrimDefine
   | PrimList
+  | PrimCond
   deriving (Show,Generic)
 instance NFData PrimOp
 
 data PrimAp
   = PrimEval
-  | PrimEval1 Value
+  | PrimEval1 (Loc, Env)
   | PrimDefineIn
-  | PrimDefineIn3 Env
-  | PrimDefineIn2 Env Symbol
-  | PrimDefineIn1 Env Symbol Symbol
+  | PrimDefineIn3 (Loc, Env)
+  | PrimDefineIn2 (Loc, Env) (Loc, Symbol)
+  | PrimDefineIn1 (Loc, Env) (Loc, Symbol) (Loc, Symbol)
   | PrimForce
   | PrimUnary PrimUnary
   | PrimBin PrimBin
-  | PrimBin1 PrimBin Value
+  | PrimBin1 PrimBin (Loc, Value)
   | PrimCaseBin PrimCaseBin
-  | PrimCaseBin2 PrimCaseBin Value
-  | PrimCaseBin1 PrimCaseBin Value Value
+  | PrimCaseBin2 PrimCaseBin (Loc, Value)
+  | PrimCaseBin1 PrimCaseBin (Loc, Value) (Loc, Value)
   | PrimCaseQuat PrimCaseQuat
-  | PrimCaseQuat4 PrimCaseQuat Value
-  | PrimCaseQuat3 PrimCaseQuat Value Value
-  | PrimCaseQuat2 PrimCaseQuat Value Value Value
-  | PrimCaseQuat1 PrimCaseQuat Value Value Value Value
+  | PrimCaseQuat4 PrimCaseQuat (Loc, Value)
+  | PrimCaseQuat3 PrimCaseQuat (Loc, Value) (Loc, Value)
+  | PrimCaseQuat2 PrimCaseQuat (Loc, Value) (Loc, Value) (Loc, Value)
+  | PrimCaseQuat1 PrimCaseQuat (Loc, Value) (Loc, Value) (Loc, Value) (Loc, Value)
   deriving (Show,Generic)
 instance NFData PrimAp
 
@@ -185,6 +201,7 @@ data PrimUnary
   = PrimSexprIntro
   | PrimSymIntro
   | PrimSymElim
+  | PrimTypeOf
   deriving (Show,Generic)
 instance NFData PrimUnary
 
@@ -207,72 +224,101 @@ data PrimCaseQuat
 instance NFData PrimCaseQuat
 
 data PrimExn
-  = ScopeExn Loc Symbol Symbol -- first namespace then name
+  = ScopeExn Symbol Symbol -- first namespace then name
   | SyntaxExn Sexpr Text
   | UncallableExn Value
   | UnexpectedOperative Callable
   | UnexpectedApplicative Callable
-  | TypeError Value -- TODO specify expected type
+  | TypeError AType Value
   deriving (Show,Generic)
 instance NFData PrimExn
+
+-- NOTE These have to type parameters, because I don't want to invent a parameter type for e.g. list litearls
+data PrimType
+  = NilType
+  | BoolType
+  | IntType
+  | StrType
+  | SymType
+  | ListType
+  | LocType
+  | SexprType
+  | TypeType
+  | EnvType
+  | FunType
+  | ThunkType
+  -- TODO | exception type, somehow
+  deriving (Show,Generic)
+instance NFData PrimType
 
 ------------------------------------ Continuations ------------------------------------
 
 data PushPop = Push | Pop
+
+-- almost every continuation also holds the location of the redex's hole,
+-- these are marked by the block comment after a location
+-- FIXME I should just use named fields
 data StackItem :: PushPop -> Type where
   Operate :: Loc -- the whole combination
-             {- operative -}
+          -> Loc {- operative -}
           -> [Sexpr]
           -> StackItem either
   Args :: Loc -- location call was made
-          {- applicative -}
+       -> Loc {- applicative -}
        -> (NonEmpty Sexpr)
        -> StackItem either
   ArgVals :: Loc -- location call was made
-             {- applicative -}
-          -> (NonEmpty Value)
+          -> Loc {- applicative -}
+          -> (NonEmpty (Loc, Value))
           -> StackItem 'Push
   ArgVal :: Loc -- location call was made
-            {- applicative -}
-         -> Value
+         -> Loc {- applicative -}
+         -> (Loc, Value)
          -> StackItem either
   Apply :: Loc -- location call was made
-        -> Callable
-           {- current argument -}
+        -> (Loc, Callable)
+        -> Loc {- current argument -}
         -> [Sexpr]
         -> StackItem 'Push
   Apply1 :: Loc -- location call was made
-         -> Callable
-            {- argument -}
+         -> (Loc, Callable)
+         -> Loc {- argument -}
          -> StackItem 'Pop
   Restore :: ReturnFrom
           -> Env
           -> StackItem either
-  Sequence :: {- current statement -}
-              (NonEmpty Sexpr)
+  Sequence :: Loc {- current statement -}
+           -> (NonEmpty Sexpr)
            -> StackItem 'Push
-  Then :: {- current statement -}
-          Sexpr
+  Then :: Loc {- current statement -}
+       -> Sexpr
        -> StackItem 'Pop
+  Cond :: Loc {- current predicate -}
+       -> Sexpr -- consequent
+       -> [(Sexpr, Sexpr)] -- remaining arcs
+       -> StackItem either
   -- supporting primitive operatives
   OpDefine :: Env
            -> Loc
            -> Symbol
-              {- definition body -}
+           -> Loc {- definition body -}
            -> StackItem either
   OpList :: RList Value
-            {- current list item -}
+         -> Loc {- current list item -}
          -> [Sexpr]
          -> StackItem either
   -- fake stack item used for rendering stack traces, but not actually evaluation
-  PrimArg :: Int -> PrimAp -> NonEmpty Value -> StackItem either -- the Int is 1-index into the argument values
+  PrimArg :: Int  -- 1-index into the argument values
+          -> Loc -- called at
+          -> PrimAp
+          -> NonEmpty (Loc, Value)
+          -> StackItem either
 deriving instance Show (StackItem either)
 
 data ReturnFrom
   = FromCall
     { calledAt :: !Loc
     , callee :: !Closure
-    , args :: ![Value]
     }
   | FromEval
     { evaledAt :: !Loc
@@ -287,14 +333,13 @@ data ReturnFrom
     }
   deriving (Show)
 
-data StackTrace = StackTrace (RList TraceItem) PrimExn
+data StackTrace = StackTrace (RList TraceItem) (Loc, PrimExn)
   deriving (Show)
 data TraceItem
   = CallTrace
     { callerEnv :: !Env
     , calledAt :: !Loc
     , callee :: !Closure
-    , args :: ![Value]
     }
   | EvalTrace
     { evalerEnv :: !Env
@@ -308,5 +353,9 @@ data TraceItem
     , thunkeeEnv :: !Env
     , thunkee :: !Sexpr
     }
-  | PrimArgTrace Int PrimAp (NonEmpty Value)
+  | PrimArgTrace
+      { argNum :: !Int
+      , calledAt :: !Loc
+      , primFunc :: PrimAp
+      }
   deriving (Show)

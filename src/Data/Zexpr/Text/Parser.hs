@@ -280,7 +280,9 @@ SquareCombo
   ::= '[' ']'
    |  '[' Zexpr (',' <ws> Zexpr)* ']'
 CurlyCombo
-  ::= '{' ChainExpr* '}'
+  ::= '{' ChainExpr* '}' -- TODO subsumed
+   |  '{' '}'
+   |  '{' Zexpr (',' <ws> Zexpr)* '}' -- TODO
 -}
 parseCombo :: Parser Zexpr
 parseCombo = MP.choice

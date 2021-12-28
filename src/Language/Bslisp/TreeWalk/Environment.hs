@@ -54,6 +54,10 @@ newDefaultEnv = do
     , ("__sequence__", PrimOp PrimSequence)
     , ("__define-in__", PrimAp PrimDefineIn)
     , ("__define__", PrimOp PrimDefine)
+    -- booleans
+    , ("__true__", BoolVal True)
+    , ("__false__", BoolVal False)
+    , ("__cond__", PrimOp PrimCond)
     -- arithmetic
     , ("__add__", PrimAp $ PrimBin PrimAdd)
     -- lists
@@ -65,6 +69,8 @@ newDefaultEnv = do
     , ("__sexpr-elim__", PrimAp $ PrimCaseQuat PrimSexprElim)
     , ("__sym-intro__", PrimAp $ PrimUnary PrimSymIntro)
     , ("__sym-elim__", PrimAp $ PrimUnary PrimSymElim)
+    -- types
+    , ("__typeof__", PrimAp $ PrimUnary PrimTypeOf)
     -- metadata
     , ("__upd-name__", PrimAp $ PrimBin PrimUpdName)
     , ("__upd-loc__", PrimAp $ PrimBin PrimUpdLoc)

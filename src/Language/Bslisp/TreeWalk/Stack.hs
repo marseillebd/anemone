@@ -5,6 +5,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Language.Bslisp.TreeWalk.Stack
   ( Stack
   , empty
@@ -41,21 +43,35 @@ push k (Stack ks) = Stack (k:ks)
 
 pop :: Stack -> (Maybe (StackItem 'Pop), Stack)
 pop st@(Stack []) = (Nothing, st)
-pop (Stack ((Operate loc sexprs) : ks)) = (Just $ Operate loc sexprs, Stack ks)
-pop (Stack ((Args calledAt args) : ks)) = (Just $ Args calledAt args, Stack ks)
-pop (Stack ((ArgVals calledAt (arg:|[])) : ks)) = (Just $ ArgVal calledAt arg, Stack ks)
-pop (Stack ((ArgVals calledAt (arg:|(v:vs))) : ks)) = (Just $ ArgVal calledAt arg, Stack $ ArgVals calledAt (v:|vs) : ks)
-pop (Stack ((ArgVal calledAt v) : ks)) = (Just $ ArgVal calledAt v, Stack ks)
-pop (Stack ((Apply calledAt f []) : ks)) = (Just $ Apply1 calledAt f, Stack ks)
-pop (Stack (Apply calledAt f [arg] : ks)) = (Just $ Apply1 calledAt f, Stack $ Args calledAt (arg:|[]) : ks)
-pop (Stack (Apply calledAt f (arg:args) : ks)) = (Just $ Apply1 calledAt f, Stack $ Args calledAt (arg:|args) : ks)
-pop (Stack (Restore from env : ks)) = (Just $ Restore from env, Stack ks)
-pop (Stack (Sequence (stmt:|stmts) : ks)) = case stmts of
-  [] -> (Just $ Then stmt, Stack ks)
-  (s:ss) -> (Just $ Then stmt, Stack (Sequence (s:|ss) : ks))
-pop (Stack ((OpDefine env loc x) : ks)) = (Just $ OpDefine env loc x, Stack ks)
-pop (Stack ((OpList vs es) : ks)) = (Just $ OpList vs es, Stack ks)
-pop (Stack ((PrimArg n f args) : ks)) = (Just $ PrimArg n f args, Stack ks)
+pop (Stack ((Operate invokedAt loc sexprs) : ks)) =
+  (Just $ Operate invokedAt loc sexprs, Stack ks)
+pop (Stack ((Args calledAt fLoc args) : ks)) =
+  (Just $ Args calledAt fLoc args, Stack ks)
+pop (Stack ((ArgVals calledAt fLoc (arg:|[])) : ks)) =
+  (Just $ ArgVal calledAt fLoc arg, Stack ks)
+pop (Stack ((ArgVals calledAt fLoc (arg:|(v:vs))) : ks)) =
+  (Just $ ArgVal calledAt fLoc arg, Stack $ ArgVals calledAt fLoc (v:|vs) : ks)
+pop (Stack ((ArgVal calledAt fLoc v) : ks)) =
+  (Just $ ArgVal calledAt fLoc v, Stack ks)
+pop (Stack ((Apply calledAt (fLoc, f) argLoc []) : ks)) =
+  (Just $ Apply1 calledAt (fLoc, f) argLoc, Stack ks)
+pop (Stack (Apply calledAt (fLoc, f) argLoc [arg] : ks)) =
+  (Just $ Apply1 calledAt (fLoc, f) argLoc, Stack $ Args calledAt (fLoc <> argLoc) (arg:|[]) : ks)
+pop (Stack (Apply calledAt (fLoc, f) argLoc (arg:args) : ks)) =
+  (Just $ Apply1 calledAt (fLoc, f) argLoc, Stack $ Args calledAt (fLoc <> argLoc) (arg:|args) : ks)
+pop (Stack (Restore from env : ks)) =
+  (Just $ Restore from env, Stack ks)
+pop (Stack (Sequence stmtLoc (stmt:|stmts) : ks)) = case stmts of
+  [] -> (Just $ Then stmtLoc stmt, Stack ks)
+  (s:ss) -> (Just $ Then stmtLoc stmt, Stack (Sequence (Sexpr.loc s) (s:|ss) : ks))
+pop (Stack (Cond pLoc c arcs : ks)) =
+  (Just $ Cond pLoc c arcs, Stack ks)
+pop (Stack ((OpDefine env loc x bodyLoc) : ks)) =
+  (Just $ OpDefine env loc x bodyLoc, Stack ks)
+pop (Stack ((OpList vs itemLoc es) : ks)) =
+  (Just $ OpList vs itemLoc es, Stack ks)
+pop (Stack ((PrimArg n calledAt f args) : ks)) =
+  (Just $ PrimArg n calledAt f args, Stack ks)
 
 
 unsafePop :: Stack -> (Maybe (StackItem 'Push), Stack)
@@ -63,34 +79,34 @@ unsafePop (Stack (k:ks)) = (Just k, Stack ks)
 unsafePop st@(Stack []) = (Nothing, st)
 
 toPush :: StackItem either -> StackItem 'Push
-toPush (Operate loc sexprs) = Operate loc sexprs
-toPush (Args calledAt sexpr) = Args calledAt sexpr
-toPush (ArgVals calledAt vs) = ArgVals calledAt vs
-toPush (ArgVal calledAt v) = ArgVal calledAt v
-toPush (Apply calledAt f args) = Apply calledAt f args
-toPush (Apply1 calledAt f) = Apply calledAt f []
+toPush (Operate invokedAt loc sexprs) = Operate invokedAt loc sexprs
+toPush (Args calledAt fLoc sexpr) = Args calledAt fLoc sexpr
+toPush (ArgVals calledAt fLoc vs) = ArgVals calledAt fLoc vs
+toPush (ArgVal calledAt fLoc v) = ArgVal calledAt fLoc v
+toPush (Apply calledAt f argLoc args) = Apply calledAt f argLoc args
+toPush (Apply1 calledAt f argLoc) = Apply calledAt f argLoc []
 toPush (Restore from env) = Restore from env
-toPush (Sequence nexts) = Sequence nexts
-toPush (Then next) = Sequence (next :| [])
-toPush (OpDefine env loc x) = OpDefine env loc x
-toPush (OpList vs sexprs) = OpList vs sexprs
-toPush (PrimArg n f args) = PrimArg n f args
+toPush (Sequence stmtLoc nexts) = Sequence stmtLoc nexts
+toPush (Then stmtLoc next) = Sequence stmtLoc (next :| [])
+toPush (Cond pLoc c arcs) = Cond pLoc c arcs
+toPush (OpDefine env loc x bodyLoc) = OpDefine env loc x bodyLoc
+toPush (OpList vs itemLoc sexprs) = OpList vs itemLoc sexprs
+toPush (PrimArg n calledAt f args) = PrimArg n calledAt f args
 
 makeTrace :: Control -> StackTrace
 makeTrace (PrimCtrl stack exn) = StackTrace (RList.catMaybes $ go <$> stack) exn
   where
-  go (Operate _ _) = Nothing
-  go (Args _ _) = Nothing
-  go (ArgVals _ _) = Nothing
-  go (ArgVal _ _) = Nothing
-  go (Apply _ _ _) = Nothing
-  go (Apply1 _ _) = Nothing
+  go (Operate _ _ _) = Nothing
+  go (Args _ _ _) = Nothing
+  go (ArgVals _ _ _) = Nothing
+  go (ArgVal _ _ _) = Nothing
+  go (Apply _ _ _ _) = Nothing
+  go (Apply1 _ _ _) = Nothing
   go (Restore from env) = Just $ case from of
-    FromCall{calledAt,callee,args} -> CallTrace
+    FromCall{calledAt,callee} -> CallTrace
       { callerEnv = env
       , calledAt
       , callee
-      , args
       }
     FromEval{evaledAt,evaleeEnv,evalee} -> EvalTrace
       { evalerEnv = env
@@ -104,23 +120,24 @@ makeTrace (PrimCtrl stack exn) = StackTrace (RList.catMaybes $ go <$> stack) exn
       , thunkeeEnv
       , thunkee
       }
-  go (Sequence _) = Nothing
-  go (Then _) = Nothing
-  go (OpDefine _ _ _) = Nothing
-  go (OpList _ _) = Nothing
-  go (PrimArg n f args) = Just $ PrimArgTrace n f args
+  go (Sequence _ _) = Nothing
+  go (Then _ _) = Nothing
+  go (Cond _ _ _) = Nothing
+  go (OpDefine _ _ _ _) = Nothing
+  go (OpList _ _ _) = Nothing
+  go (PrimArg argNum calledAt primFunc _) = Just $ PrimArgTrace{argNum,calledAt,primFunc}
 
 instance Pretty StackTrace where
-  pretty (StackTrace stack exn) = PP.vsep $ RList.reverse (goItem <$> stack) ++ [PP.viaShow exn]
+  pretty (StackTrace stack (loc, exn)) = PP.vsep $ RList.reverse (goItem <$> stack) ++ [goExn]
     where
-    goItem CallTrace{callee=Closure{name,definedAt},calledAt,args} =
+    goExn = PP.nest 2 . PP.vsep $ ["unhandled control raised from" <+> pretty loc, PP.viaShow exn]
+    goItem CallTrace{callee=Closure{name,definedAt},calledAt} =
       let nameInfo = case name of
             Just x -> "function " <> PP.pretty (renderSymbol x)
             Nothing -> "anonymous function"
           defLocInfo =  "(" <> pretty definedAt <> ")"
           callSiteInfo = "called at" <+> pretty calledAt
-          argsInfo = PP.group . PP.nest 2 . PP.vsep $ "with arguments" : fmap pretty args
-       in "in" <+> nameInfo <+> defLocInfo <+> callSiteInfo <+> argsInfo
+       in "in" <+> nameInfo <+> defLocInfo <+> callSiteInfo
     goItem EvalTrace{evaledAt,evaleeEnv,evalee} = PP.nest 2 . PP.vsep $
       [ "when eval'ing" <+> "(" <> pretty evaledAt <> ") in <" <> pretty evaleeEnv <> "> the s-expr:"
       , Sexpr.renderPretty evalee
@@ -128,4 +145,5 @@ instance Pretty StackTrace where
     goItem ThunkTrace{forcedAt,thunkee} =
       let header = "while forcing thunk (" <> pretty forcedAt <> ") suspended from " <> pretty (Sexpr.loc thunkee)
        in header <> PP.hardline <> PP.indent 2 (Sexpr.renderPretty thunkee)
-    goItem PrimArgTrace{} = "in argument <> of primitive <> with arguments <>"
+    goItem PrimArgTrace{argNum,calledAt,primFunc} =
+      "in argument" <+> pretty argNum <+> "of primitive" <+> PP.viaShow primFunc <+> "called at" <+> pretty calledAt

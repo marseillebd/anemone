@@ -1,10 +1,15 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Data.Zexpr.Location
   ( Loc(..)
   ) where
 
 import Control.DeepSeq (NFData)
+import Data.Text.Prettyprint.Doc (Pretty(..))
 import GHC.Generics (Generic)
 
 data Loc
@@ -29,3 +34,10 @@ instance Semigroup Loc where
     , toLine = toLine l2
     , toCol = toCol l2
     }
+
+instance Pretty Loc where
+  pretty LocUnknown = "unknown"
+  pretty Loc{filename,fromLine,fromCol,toLine,toCol} =
+       pretty filename
+    <> ":" <> pretty fromLine <> ":" <> pretty fromCol
+    <> "-" <> (if fromLine == toLine then "" else pretty toLine <> ":") <> pretty toCol
