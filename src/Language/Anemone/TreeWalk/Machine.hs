@@ -9,7 +9,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Bslisp.TreeWalk.Machine
+module Language.Anemone.TreeWalk.Machine
   ( Eval
   , runEval
   , execEval
@@ -31,13 +31,13 @@ import Control.Monad.Trans.State.Strict (StateT,gets,modify',state,runStateT)
 import Data.Bifunctor (second)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Word (Word64)
-import Language.Bslisp.TreeWalk.Environment (Env)
-import Language.Bslisp.TreeWalk.Stack (Stack,StackItem(..),PushPop(..),ReturnFrom(..))
-import Language.Bslisp.TreeWalk.Value (Control)
-import Language.Bslisp.TreeWalk.Value (Value)
+import Language.Anemone.TreeWalk.Environment (Env)
+import Language.Anemone.TreeWalk.Stack (Stack,StackItem(..),PushPop(..),ReturnFrom(..))
+import Language.Anemone.TreeWalk.Value (Control)
+import Language.Anemone.TreeWalk.Value (Value)
 
 import qualified Data.List.NonEmpty as NE
-import qualified Language.Bslisp.TreeWalk.Stack as Stack
+import qualified Language.Anemone.TreeWalk.Stack as Stack
 
 newtype Eval a = Eval { unEval :: StateT Machine IO a }
   deriving (Functor, Applicative, Monad, MonadIO)

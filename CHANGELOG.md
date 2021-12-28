@@ -1,4 +1,4 @@
-# Revision history for bslisp
+# Revision history for anemone
 
 ## 0.0.1.0 -- YYYY-mm-dd
 

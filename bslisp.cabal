@@ -1,11 +1,11 @@
 cabal-version: 3.0
-name: bslisp
+name: anemone
 version: 0.0.1.0
 -- synopsis: 
 -- description:
 category: Language
-homepage: https://github.com/Okuno Zankoku/bslisp
-bug-reports: https://github.com/Okuno Zankoku/bslisp/issues
+homepage: https://github.com/Okuno Zankoku/anemone
+bug-reports: https://github.com/Okuno Zankoku/anemone/issues
 author: Okuno Zankoku
 maintainer: zankoku.okuno@gmail.com
 copyright: 2021 Okuno Zankoku
@@ -24,14 +24,14 @@ library
     Data.Zexpr.Text.Parser
     Data.Zexpr.Text.Render
     Data.Zexpr.Zexpr
-    Language.Bslisp.Keywords
-    Language.Bslisp.TreeWalk.Environment
-    Language.Bslisp.TreeWalk.Eval
-    Language.Bslisp.TreeWalk.Machine
-    Language.Bslisp.TreeWalk.Stack
-    Language.Bslisp.TreeWalk.Type
-    Language.Bslisp.TreeWalk.Unsafe.Types
-    Language.Bslisp.TreeWalk.Value
+    Language.Anemone.Keywords
+    Language.Anemone.TreeWalk.Environment
+    Language.Anemone.TreeWalk.Eval
+    Language.Anemone.TreeWalk.Machine
+    Language.Anemone.TreeWalk.Stack
+    Language.Anemone.TreeWalk.Type
+    Language.Anemone.TreeWalk.Unsafe.Types
+    Language.Anemone.TreeWalk.Value
   -- other-modules:
   build-depends:
     , base >=4.11.1
@@ -51,13 +51,13 @@ library
   -- DEBUG
   ghc-options: -Wall -Wunticked-promoted-constructors
 
-executable bslisp
+executable anemone
   hs-source-dirs: app
   main-is: Main.hs
   -- other-modules:
   build-depends:
     , base
-    , bslisp
+    , anemone
     , pretty-simple >=4.0
     , prettyprinter
     , symbol
@@ -72,7 +72,7 @@ test-suite test
   main-is: Main.hs
   type: exitcode-stdio-1.0
   build-depends:
-    , bslisp
+    , anemone
     , base
     -- , quickcheck-classes
     -- , tasty
@@ -86,7 +86,7 @@ benchmark bench
   main-is: Main.hs
   type: exitcode-stdio-1.0
   build-depends:
-    , bslisp
+    , anemone
     , base
     , gauge
   default-language: Haskell2010

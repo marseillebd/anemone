@@ -9,7 +9,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Bslisp.TreeWalk.Eval
+module Language.Anemone.TreeWalk.Eval
   ( eval
   ) where
 
@@ -25,27 +25,27 @@ import Data.List.Reverse (RList,snoc)
 import Data.Symbol (intern,unintern)
 import Data.Zexpr.Location (Loc(..))
 import Data.Zexpr.Sexpr (Atom(..),Sexpr(..))
-import Language.Bslisp.TreeWalk.Environment (Env(..),Binding(..))
-import Language.Bslisp.TreeWalk.Environment (valueNamespace)
-import Language.Bslisp.TreeWalk.Machine (currentEnv,enterEnv,returnToEnv)
-import Language.Bslisp.TreeWalk.Machine (Eval,runEval,val,ctrl)
-import Language.Bslisp.TreeWalk.Machine (pop,push,remergePop)
-import Language.Bslisp.TreeWalk.Stack (StackItem(..),PushPop(..),ReturnFrom(..))
-import Language.Bslisp.TreeWalk.Type (typeOf)
-import Language.Bslisp.TreeWalk.Value (Control(..),capture,PrimExn(..))
-import Language.Bslisp.TreeWalk.Value (PrimCaseBin(..),PrimCaseQuat(..))
-import Language.Bslisp.TreeWalk.Value (PrimOp(..),PrimAp(..))
-import Language.Bslisp.TreeWalk.Value (PrimUnary(..),PrimBin(..))
-import Language.Bslisp.TreeWalk.Value (Value(..),Callable(..),toCallable,Closure(..),Laziness(..),Thunk(..))
+import Language.Anemone.TreeWalk.Environment (Env(..),Binding(..))
+import Language.Anemone.TreeWalk.Environment (valueNamespace)
+import Language.Anemone.TreeWalk.Machine (currentEnv,enterEnv,returnToEnv)
+import Language.Anemone.TreeWalk.Machine (Eval,runEval,val,ctrl)
+import Language.Anemone.TreeWalk.Machine (pop,push,remergePop)
+import Language.Anemone.TreeWalk.Stack (StackItem(..),PushPop(..),ReturnFrom(..))
+import Language.Anemone.TreeWalk.Type (typeOf)
+import Language.Anemone.TreeWalk.Value (Control(..),capture,PrimExn(..))
+import Language.Anemone.TreeWalk.Value (PrimCaseBin(..),PrimCaseQuat(..))
+import Language.Anemone.TreeWalk.Value (PrimOp(..),PrimAp(..))
+import Language.Anemone.TreeWalk.Value (PrimUnary(..),PrimBin(..))
+import Language.Anemone.TreeWalk.Value (Value(..),Callable(..),toCallable,Closure(..),Laziness(..),Thunk(..))
 
 import qualified Data.List.NonEmpty as NE
 import qualified Data.List.Reverse as R
 import qualified Data.Text as T
 import qualified Data.Zexpr.Sexpr as Sexpr
-import qualified Language.Bslisp.Keywords as Keyword
-import qualified Language.Bslisp.TreeWalk.Environment as Env
-import qualified Language.Bslisp.TreeWalk.Stack as Stack
-import qualified Language.Bslisp.TreeWalk.Type as Ty
+import qualified Language.Anemone.Keywords as Keyword
+import qualified Language.Anemone.TreeWalk.Environment as Env
+import qualified Language.Anemone.TreeWalk.Stack as Stack
+import qualified Language.Anemone.TreeWalk.Type as Ty
 
 eval :: [Sexpr] -> Env -> IO (Either Control Value)
 eval stmts env = runEval env $ case stmts of

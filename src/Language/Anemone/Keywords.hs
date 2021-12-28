@@ -1,4 +1,4 @@
-module Language.Bslisp.Keywords
+module Language.Anemone.Keywords
   ( operate
   , quote
   ) where

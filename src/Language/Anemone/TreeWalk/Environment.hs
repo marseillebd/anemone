@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
-module Language.Bslisp.TreeWalk.Environment
+module Language.Anemone.TreeWalk.Environment
   ( Env(..)
   , Binding(..)
   , lookup
@@ -19,10 +19,10 @@ import Control.Monad (forM_)
 import Control.Monad.IO.Class (MonadIO,liftIO)
 import Data.IORef (newIORef,readIORef,modifyIORef')
 import Data.Symbol.Unsafe (Symbol(..),intern)
-import Language.Bslisp.TreeWalk.Unsafe.Types (Env(..),Namespace(..),Binding(..))
-import Language.Bslisp.TreeWalk.Value (PrimUnary(..),PrimBin(..))
-import Language.Bslisp.TreeWalk.Value (PrimCaseBin(..),PrimCaseQuat(..))
-import Language.Bslisp.TreeWalk.Value (Value(..),PrimOp(..),PrimAp(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (Env(..),Namespace(..),Binding(..))
+import Language.Anemone.TreeWalk.Value (PrimUnary(..),PrimBin(..))
+import Language.Anemone.TreeWalk.Value (PrimCaseBin(..),PrimCaseQuat(..))
+import Language.Anemone.TreeWalk.Value (Value(..),PrimOp(..),PrimAp(..))
 
 import qualified Data.IntMap.Strict as Map
 

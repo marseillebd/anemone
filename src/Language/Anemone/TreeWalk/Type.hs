@@ -1,4 +1,4 @@
-module Language.Bslisp.TreeWalk.Type
+module Language.Anemone.TreeWalk.Type
   ( AType(..)
   , ATypeInfo(..)
   , PrimType(..)
@@ -18,8 +18,8 @@ module Language.Bslisp.TreeWalk.Type
   , primThunk
   ) where
 
-import Language.Bslisp.TreeWalk.Unsafe.Types (AType(..),ATypeInfo(..),PrimType(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (Value(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (AType(..),ATypeInfo(..),PrimType(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (Value(..))
 
 typeOf :: Value -> AType
 typeOf NilVal = primNil

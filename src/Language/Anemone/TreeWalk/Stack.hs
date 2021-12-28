@@ -7,7 +7,7 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Language.Bslisp.TreeWalk.Stack
+module Language.Anemone.TreeWalk.Stack
   ( Stack
   , empty
   , StackItem(..)
@@ -23,10 +23,10 @@ module Language.Bslisp.TreeWalk.Stack
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text.Prettyprint.Doc (Pretty(..),(<+>))
 import Data.Zexpr.Sexpr.Text.Render (renderSymbol)
-import Language.Bslisp.TreeWalk.Unsafe.Types (StackItem(..),PushPop(..),ReturnFrom(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (StackTrace(..),TraceItem(..))
-import Language.Bslisp.TreeWalk.Value (Closure(..))
-import Language.Bslisp.TreeWalk.Value (Control(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (StackItem(..),PushPop(..),ReturnFrom(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (StackTrace(..),TraceItem(..))
+import Language.Anemone.TreeWalk.Value (Closure(..))
+import Language.Anemone.TreeWalk.Value (Control(..))
 
 import qualified Data.List.Reverse as RList
 import qualified Data.Text.Prettyprint.Doc as PP

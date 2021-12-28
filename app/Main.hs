@@ -1,21 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
 
+{-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
+
 module Main (main) where
 
 import Data.Functor ((<&>))
 import Data.Symbol (intern)
-import Data.Text.Prettyprint.Doc (Doc,Pretty(pretty))
+import Data.Text.Prettyprint.Doc (Pretty(pretty))
 import Data.Text.Prettyprint.Doc.Render.Text (renderIO)
 import Data.Text.Prettyprint.Doc.Util (putDocW)
 import Data.Zexpr (toSexpr,Conf(..),defaultConf)
 import Data.Zexpr.Sexpr.Text.Render (renderPretty)
 import Data.Zexpr.Text.Parser (parse,errorBundlePretty)
-import Language.Bslisp.TreeWalk.Environment (newDefaultEnv,Env(..))
-import Language.Bslisp.TreeWalk.Eval (eval)
-import Language.Bslisp.TreeWalk.Stack (makeTrace)
+import Language.Anemone.TreeWalk.Environment (newDefaultEnv,Env(..))
+import Language.Anemone.TreeWalk.Eval (eval)
+import Language.Anemone.TreeWalk.Stack (makeTrace)
 import System.Exit (exitFailure)
-import System.IO (Handle,stderr)
-import System.IO (stderr,hPutStr,hPutStrLn)
+import System.IO (Handle,stderr,hPutStr,hPutStrLn)
 import Text.Pretty.Simple (pPrint)
 
 import qualified Data.Text.IO as T
@@ -52,6 +53,7 @@ lispMain = do
     Right vs -> pure vs
   ((>> putStrLn "") . putDocW 100 . renderPretty . toSexpr lispConf) `mapM_` vs
 
+lispConf :: Conf
 lispConf = Conf
   { operativeName = "__operate__"
   , qualifyName = "qname"

@@ -6,7 +6,7 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Language.Bslisp.TreeWalk.Value
+module Language.Anemone.TreeWalk.Value
   ( Value(..)
   , Callable(..)
   , Laziness(..)
@@ -28,14 +28,14 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Reverse (RList,snoc)
 import Data.Text.Prettyprint.Doc (Pretty(..),(<+>))
 import Data.Zexpr.Location (Loc)
-import Language.Bslisp.TreeWalk.Type (AType(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (Callable(..),Closure(..),Laziness(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (PrimCaseBin(..),PrimCaseQuat(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (PrimExn(..),StackItem(..),PushPop(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (PrimOp(..),PrimAp(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (PrimUnary(..),PrimBin(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (Thunk(..),Env(..))
-import Language.Bslisp.TreeWalk.Unsafe.Types (Value(..))
+import Language.Anemone.TreeWalk.Type (AType(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (Callable(..),Closure(..),Laziness(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (PrimCaseBin(..),PrimCaseQuat(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (PrimExn(..),StackItem(..),PushPop(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (PrimOp(..),PrimAp(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (PrimUnary(..),PrimBin(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (Thunk(..),Env(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (Value(..))
 
 import qualified Data.Text.Prettyprint.Doc as PP
 import qualified Data.Zexpr.Sexpr.Text.Render as Sexpr

@@ -6,7 +6,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
-module Language.Bslisp.TreeWalk.Unsafe.Types
+module Language.Anemone.TreeWalk.Unsafe.Types
   ( Value(..)
   -- * Functions
   , Callable(..)
