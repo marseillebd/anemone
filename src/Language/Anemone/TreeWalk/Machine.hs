@@ -108,11 +108,15 @@ currentEnv :: Eval Env
 currentEnv = Eval $ gets env
 
 enterEnv :: ReturnFrom -> Env -> Eval ()
-enterEnv trace env' = Eval $ do
-  -- FIXME tail call optimization
-  env0 <- gets env
-  unEval . push $ Restore trace env0
-  modify' $ \st -> st{env=env'}
+enterEnv trace env' = do
+  unsafePop >>= \case
+    Just (Restore trace0 env0) -> do
+      push $ Restore trace0 env0
+    k -> do
+      maybe (pure ()) push k
+      env0 <- Eval $ gets env
+      push $ Restore trace env0
+  Eval $ modify' $ \st -> st{env=env'}
 
 returnToEnv :: Env -> Eval ()
 returnToEnv env0 = Eval $ do
