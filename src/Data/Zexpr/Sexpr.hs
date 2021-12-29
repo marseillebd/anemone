@@ -8,6 +8,7 @@ module Data.Zexpr.Sexpr
   ) where
 
 import Control.DeepSeq (NFData)
+import Data.Sequence (Seq)
 import Data.Symbol.Unsafe (Symbol(..))
 import Data.Text (Text)
 import Data.Zexpr.Location (Loc(..))
@@ -30,7 +31,7 @@ instance NFData Atom
 
 data Sexpr
   = SAtom Loc Atom
-  | SCombo Loc [Sexpr]
+  | SCombo Loc (Seq Sexpr)
   deriving (Show,Eq,Generic)
 instance NFData Sexpr
 

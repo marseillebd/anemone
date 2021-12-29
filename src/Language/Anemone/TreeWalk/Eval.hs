@@ -18,10 +18,12 @@ import Control.DeepSeq (force)
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (second)
+import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.IORef (newIORef,readIORef,writeIORef)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Reverse (RList,snoc)
+import Data.Sequence (Seq(..))
 import Data.Symbol (intern,unintern)
 import Data.Zexpr.Location (Loc(..))
 import Data.Zexpr.Sexpr (Atom(..),Sexpr(..))
@@ -31,9 +33,9 @@ import Language.Anemone.TreeWalk.Machine (currentEnv,enterEnv,returnToEnv)
 import Language.Anemone.TreeWalk.Machine (Eval,runEval,val,ctrl)
 import Language.Anemone.TreeWalk.Machine (pop,push,remergePop)
 import Language.Anemone.TreeWalk.Stack (StackItem(..),PushPop(..),ReturnFrom(..))
-import Language.Anemone.TreeWalk.Type (typeOf)
-import Language.Anemone.TreeWalk.Value (Control(..),capture,PrimExn(..))
-import Language.Anemone.TreeWalk.Value (PrimCaseBin(..),PrimCaseQuat(..))
+import Language.Anemone.TreeWalk.Type (typeOf,typeElim)
+import Language.Anemone.TreeWalk.Value (Control(..),capture,PrimExn(..),equal)
+import Language.Anemone.TreeWalk.Value (PrimCaseUnary(..),PrimCaseBin(..),PrimCaseQuat(..))
 import Language.Anemone.TreeWalk.Value (PrimOp(..),PrimAp(..))
 import Language.Anemone.TreeWalk.Value (PrimUnary(..),PrimBin(..))
 import Language.Anemone.TreeWalk.Value (Value(..),Callable(..),toCallable,Closure(..),Laziness(..),Thunk(..))
@@ -59,7 +61,6 @@ eval stmts env = runEval env $ case stmts of
     Nothing -> pure r
     Just k -> reduce k r >>= loop
 
-
 elaborate :: Sexpr -> Eval (Either Control Value)
 elaborate = \case
   SAtom _ (Int n) -> val $ IntVal n
@@ -69,17 +70,28 @@ elaborate = \case
     Env.lookup env0 valueNamespace x >>= \case
       Just Bound{value} -> val value
       Nothing -> ctrl $ PrimCtrl R.nil (loc, ScopeExn valueNamespace x)
-  SCombo _ [] -> val NilVal
-  SCombo invokedAt combo@(SAtom _ (Sym x) : es)
-    | x == Keyword.operate -> case es of
-      [] -> ctrl $ PrimCtrl R.nil (invokedAt, SyntaxExn (SCombo invokedAt combo) "expecting operative")
-      op:sexprs -> do
-        push $ Operate invokedAt (Sexpr.loc op) sexprs
-        elaborate op
-  SCombo _ [e] -> elaborate e
-  SCombo loc (f:arg:args) -> do
-    push $ Args loc (Sexpr.loc f) (arg:|args)
+  SCombo _ Empty -> val NilVal
+  opCombo@(SCombo invokedAt (SAtom _ (Sym x) :<| fs))
+    | x == Keyword.operate -> case fromOperator opCombo fs of
+      Right f -> do
+        push $ Operate invokedAt (Sexpr.loc f) Empty
+        elaborate f
+      Left exn -> ctrl $ PrimCtrl R.nil exn
+  SCombo invokedAt (opCombo@(SCombo _ (SAtom _ (Sym x) :<| fs)) :<| args)
+    | x == Keyword.operate -> case fromOperator opCombo fs of
+      Right f -> do
+        push $ Operate invokedAt (Sexpr.loc f) args
+        elaborate f
+      Left exn -> ctrl $ PrimCtrl R.nil exn
+  SCombo _ (e:<|Empty) -> elaborate e
+  SCombo loc (f:<|arg:<|args) -> do
+    push $ Args loc (Sexpr.loc f) (arg:|toList args)
     elaborate f
+  where
+  fromOperator opCombo fs = case fs of
+    Empty -> Left (Sexpr.loc opCombo, SyntaxExn opCombo "expecting operative")
+    f:<|Empty -> Right f
+    _:<|extra:<|_ -> Left (Sexpr.loc extra, SyntaxExn extra "unexpected s-expression after operative")
 
 reduce :: StackItem 'Pop -> Either Control Value -> Eval (Either Control Value)
 reduce k (Right v) = case k of
@@ -120,17 +132,17 @@ reduce k (Right v) = case k of
   Cond pLoc c arcs -> case v of
     BoolVal True -> elaborate c
     BoolVal False -> case arcs of
-      [] -> val NilVal
-      (p',c'):arcs' -> do
+      Empty -> val NilVal
+      (p',c'):<|arcs' -> do
         push $ Cond (Sexpr.loc p') c' arcs'
         elaborate p'
     _ -> ctrl $ PrimCtrl (R.singleton $ Stack.toPush k) (pLoc, TypeError Ty.primBool v)
   OpDefine inEnv _ x _ -> do
     Env.define inEnv valueNamespace x v
     val v
-  OpList vs _ [] -> val $ ListVal $ R.toList (vs `snoc` v)
-  OpList vs _ (e:es) -> do
-    push $ OpList (vs `snoc` v) (Sexpr.loc e) es
+  OpList vs _ Empty -> val $ ListVal (vs :|> v)
+  OpList vs _ (e:<|es) -> do
+    push $ OpList (vs :|> v) (Sexpr.loc e) es
     elaborate e
   PrimArg _ _ _ _ -> error "internal error: popped `PrimArg` continuation while reducing"
 reduce k1 (Left exn) = do
@@ -181,6 +193,8 @@ apply _ _ (CallPrim (PrimBin prim)) a = val $ PrimAp (PrimBin1 prim a)
 apply _ calledAt (CallPrim (PrimBin1 prim a)) b = case evalPrimBin prim a b of
   Right v -> val v
   Left (n, exn) -> raisePrimArg n calledAt (PrimBin prim) (a:|[b]) exn
+apply _ _ (CallPrim (PrimCaseUnary prim)) a = val $ PrimAp (PrimCaseUnary1 prim a)
+apply _ calledAt (CallPrim (PrimCaseUnary1 prim v)) a = evalPrimCaseUnary calledAt prim v a
 apply _ _ (CallPrim (PrimCaseBin prim)) v = val $ PrimAp (PrimCaseBin2 prim v)
 apply _ _ (CallPrim (PrimCaseBin2 prim v)) a = val $ PrimAp (PrimCaseBin1 prim v a)
 apply _ calledAt (CallPrim (PrimCaseBin1 prim v a)) b = evalPrimCaseBin calledAt prim v a b
@@ -211,10 +225,10 @@ applyImmediate calledAt (fLoc, f) args = do
   push $ ArgVals calledAt fLoc ((LocUnknown,) <$> args) -- TODO perhaps I should ask for argument locations
   val f
 
-operate :: StackItem 'Pop -> (Loc, Callable) -> Env -> Loc -> [Sexpr] -> Eval (Either Control Value)
+operate :: StackItem 'Pop -> (Loc, Callable) -> Env -> Loc -> Seq Sexpr -> Eval (Either Control Value)
 operate _ (_, OperPrim PrimLambda) env loc sexprs = case sexprs of
-  [paramSexprs, body] -> case toParamList paramSexprs of
-    Just params -> val $ ClosureVal Closure
+  paramSexprs:<|body:<|Empty -> case toParamList paramSexprs of
+    Right params -> val $ ClosureVal Closure
       { name = Nothing
       , definedAt = loc
       , scope = env
@@ -222,53 +236,53 @@ operate _ (_, OperPrim PrimLambda) env loc sexprs = case sexprs of
       , params
       , body
       }
-    Nothing -> ctrl $ PrimCtrl R.nil (Sexpr.loc paramSexprs, SyntaxExn paramSexprs "expecting parameter list")
-  [] -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting parameter list and function body")
-  [_] -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting function body")
-  (_:_:extra:_) -> ctrl $ PrimCtrl R.nil (Sexpr.loc extra, SyntaxExn extra "unexpected s-expr after function body")
+    Left exn -> ctrl $ PrimCtrl R.nil exn
+  Empty -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting parameter list and function body")
+  _:<|Empty -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting function body")
+  _:<|_:<|extra:<|_ -> ctrl $ PrimCtrl R.nil (Sexpr.loc extra, SyntaxExn extra "unexpected s-expr after function body")
   where
+    -- (Sexpr.loc paramSexprs, SyntaxExn paramSexprs "expecting parameter list")
   -- TODO toParamList should specify the offending item rather than just saying the whole thing is bad
-  toParamList (SAtom _ _) = Nothing
-  toParamList (SCombo _ params) = go params
+  toParamList lst@(SAtom _ _) = Left (Sexpr.loc lst, SyntaxExn lst "expecting parameter list")
+  toParamList lst@(SCombo _ params) = go params
     where
-    go [] = Nothing
-    go [param] = go1 param <&> (:|[])
-    go (param:rest) = NE.cons <$> go1 param <*> go rest
-    go1 (SAtom _ (Sym x)) = Just (Strict, x)
-    go1 (SCombo _ [SAtom _ (Sym laziness), SAtom _ (Sym x)])
-      -- TODO | laziness == intern "!" = Just (Strict, x) -- actually, bang should probably force any incoming thunks automatically
+    go Empty = Left (Sexpr.loc lst, SyntaxExn lst "expecting non-empty parameter list")
+    go (param:<|Empty) = go1 param <&> (:|[])
+    go (param:<|rest) = NE.cons <$> go1 param <*> go rest
+    go1 (SAtom _ (Sym x)) = Right (Strict, x)
+    go1 (SCombo _ (SAtom _ (Sym laziness) :<| SAtom _ (Sym x) :<| Empty))
+      -- TODO | laziness == intern "!" = Right (Strict, x) -- actually, bang should probably force any incoming thunks automatically
       -- however, this need not be a feature of the core, but can be implemented in anemone itself
-      | laziness == intern "~" = Just (Lazy, x)
-      | otherwise = Nothing
-    go1 _ = Nothing
+      | laziness == intern "~" = Right (Lazy, x)
+    go1 nonParam = Left (Sexpr.loc nonParam, SyntaxExn nonParam "expecting parameter")
 operate _ (_, OperPrim PrimSequence) _ loc sexprs = case sexprs of
-  [] -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting one or more statements")
-  [stmt] -> elaborate stmt
-  (stmt:s:ss) -> do
-    push $ Sequence (Sexpr.loc stmt) (s:|ss)
+  Empty -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting one or more statements")
+  stmt:<|Empty -> elaborate stmt
+  stmt:<|s:<|ss -> do
+    push $ Sequence (Sexpr.loc stmt) (s:|toList ss)
     elaborate stmt
 operate _ (_, OperPrim PrimDefine) env loc sexprs = case sexprs of
-  [SAtom _ (Sym x), body] -> do
+  SAtom _ (Sym x) :<| body :<| Empty -> do
     push $ OpDefine env loc x (Sexpr.loc body)
     elaborate body
-  [] -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting symbol")
-  [_] -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting definition body")
-  [nonSymbol, _] -> ctrl $ PrimCtrl R.nil (Sexpr.loc nonSymbol, SyntaxExn nonSymbol "expecting symbol")
-  (_:_:extra:_) -> ctrl $ PrimCtrl R.nil (Sexpr.loc extra, SyntaxExn extra "unexpected s-expr after definition body")
+  Empty -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting symbol")
+  _:<|Empty -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting definition body")
+  nonSymbol:<|_:<|Empty -> ctrl $ PrimCtrl R.nil (Sexpr.loc nonSymbol, SyntaxExn nonSymbol "expecting symbol")
+  _:<|_:<|extra:<|_ -> ctrl $ PrimCtrl R.nil (Sexpr.loc extra, SyntaxExn extra "unexpected s-expr after definition body")
 operate _ (_, OperPrim PrimList) _ _ sexprs = case sexprs of
-  [] -> val $ ListVal []
-  (x:xs) -> do
-    push $ OpList R.nil (Sexpr.loc x) xs
+  Empty -> val $ ListVal Empty
+  x:<|xs -> do
+    push $ OpList Empty (Sexpr.loc x) xs
     elaborate x
 operate _ (_, OperPrim PrimCond) _ _ sexprs = case toArc `mapM` sexprs of
-  Just ((p,c):arcs) -> do
+  Right ((p,c):<|arcs) -> do
     push $ Cond (Sexpr.loc p) c arcs
     elaborate p
-  Just [] -> undefined -- TODO
-  Nothing -> undefined -- TODO
+  Right Empty -> val NilVal
+  Left nonArc -> ctrl $ PrimCtrl R.nil (Sexpr.loc nonArc, SyntaxExn nonArc "expecting predicate-consequent pair")
   where
-  toArc (SCombo _ [p, c]) = Just (p, c)
-  toArc _ = Nothing
+  toArc (SCombo _ (p :<| c :<| Empty)) = Right (p, c)
+  toArc nonArc = Left nonArc
 operate k (loc, ap@(CallPrim _)) _ _ _ = raise PrimCtrl k (loc, UnexpectedApplicative ap)
 operate _ (fLoc, CallClosure f) env loc sexprs =
   let args = EnvVal env :| [LocVal loc, ListVal $ SexprVal <$> sexprs]
@@ -301,8 +315,8 @@ evalPrimUnary PrimSexprIntro (_, SymVal x) = Right . SexprVal $ SAtom LocUnknown
 evalPrimUnary PrimSexprIntro (_, ListVal xs0)
   | Just sexprs <- fromSexprList xs0 = Right . SexprVal $ SCombo LocUnknown sexprs
   where
-  fromSexprList [] = Just []
-  fromSexprList ((SexprVal sexpr) : xs) = (sexpr :) <$> fromSexprList xs
+  fromSexprList Empty = Just Empty
+  fromSexprList ((SexprVal sexpr) :<| xs) = (sexpr :<|) <$> fromSexprList xs
   fromSexprList _ = Nothing
 evalPrimUnary PrimSexprIntro (_, v) = Left $ TypeError Ty.primSexprable v
 evalPrimUnary PrimSymIntro (_, StrVal s) = Right $ SymVal (intern $ T.unpack s)
@@ -312,10 +326,11 @@ evalPrimUnary PrimSymElim (_, v) = Left $ TypeError Ty.primSym v
 evalPrimUnary PrimTypeOf (_, v) = Right $ TypeVal (typeOf v)
 
 evalPrimBin :: PrimBin -> (Loc, Value) -> (Loc, Value) -> Either (Int, PrimExn) Value
+evalPrimBin PrimEqual (_, a) (_, b) = Right $ BoolVal (a `equal` b)
 evalPrimBin PrimAdd (_, IntVal a) (_, IntVal b) = Right $ IntVal (a + b)
 evalPrimBin PrimAdd (_, IntVal _) (_, v) = Left (2, TypeError Ty.primInt v)
 evalPrimBin PrimAdd (_, v) _ = Left (1, TypeError Ty.primInt v)
-evalPrimBin PrimCons (_, x) (_, ListVal xs) = Right $ ListVal (x : xs)
+evalPrimBin PrimCons (_, x) (_, ListVal xs) = Right $ ListVal (x :<| xs)
 evalPrimBin PrimCons _ (_, v) = Left (2, TypeError Ty.primList v)
 evalPrimBin PrimUpdName (_, SymVal x) (_, v) = case v of
   ClosureVal f -> Right $ ClosureVal f{name = Just x}
@@ -330,13 +345,23 @@ evalPrimBin PrimUpdLoc (_, LocVal loc) (_, v) = case v of
   _ -> Right v
 evalPrimBin PrimUpdLoc (_, v) _ = Left (1, TypeError Ty.primLoc v)
 
+evalPrimCaseUnary :: Loc
+                  -> PrimCaseUnary -> (Loc, Value)
+                  -> (Loc, Value)
+                  -> Eval (Either Control Value)
+evalPrimCaseUnary calledAt PrimTypeElim (_, TypeVal ty) body =
+  let (tycon, args) = typeElim ty
+   in applyImmediate calledAt body $ TyconVal tycon :| [ListVal $ args]
+evalPrimCaseUnary calledAt PrimTypeElim v a =
+  raisePrimArg 1 calledAt (PrimCaseUnary PrimTypeElim) (v:|[a]) (TypeError Ty.primType (snd v))
+
 evalPrimCaseBin :: Loc
                 -> PrimCaseBin -> (Loc, Value)
                 -> (Loc, Value) -> (Loc, Value)
                 -> Eval (Either Control Value)
 evalPrimCaseBin calledAt PrimUncons (_, ListVal lst) onNull onCons = case lst of
-  [] -> applyImmediate calledAt onNull $ NilVal :| []
-  (x:xs) -> applyImmediate calledAt onCons $ x :| [ListVal xs]
+  Empty -> applyImmediate calledAt onNull $ NilVal :| []
+  x:<|xs -> applyImmediate calledAt onCons $ x :| [ListVal xs]
 evalPrimCaseBin calledAt PrimUncons v a b =
   raisePrimArg 1 calledAt (PrimCaseBin PrimUncons) (v:|[a,b]) (TypeError Ty.primList (snd v))
 

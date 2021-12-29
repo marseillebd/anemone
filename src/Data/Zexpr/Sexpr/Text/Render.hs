@@ -14,6 +14,7 @@ import Prelude hiding (exp)
 
 import Data.Bits ((.&.), unsafeShiftR)
 import Data.Char (ord, isPrint)
+import Data.Foldable (toList)
 import Data.List (intercalate)
 import Data.Symbol (Symbol,unintern)
 import Data.Text (Text)
@@ -27,13 +28,13 @@ import qualified Data.Text.Prettyprint.Doc as PP
 
 renderPlain :: Sexpr -> String
 renderPlain (SAtom _ a) = renderAtom a
-renderPlain (SCombo _ es) = concat ["(", intercalate " " (renderPlain <$> es), ")"]
+renderPlain (SCombo _ es) = concat ["(", intercalate " " (renderPlain <$> toList es), ")"]
 
 renderPretty :: Sexpr -> Doc ann
 renderPretty = group . go
   where
   go (SAtom _ a) = pretty $ renderAtom a
-  go (SCombo _ es) = funtime es
+  go (SCombo _ es) = funtime (toList es)
   -- standard [] = "()"
   -- standard [e] = "(" <> group (renderPretty e) <> ")"
   -- standard (e:es) =

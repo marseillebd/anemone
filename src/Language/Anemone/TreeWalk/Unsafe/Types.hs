@@ -17,11 +17,13 @@ module Language.Anemone.TreeWalk.Unsafe.Types
   , Atom(..)
   , AType(..)
   , ATypeInfo(..)
+  , Tycon(..)
   , PrimType(..)
   , PrimOp(..)
   , PrimAp(..)
   , PrimUnary(..)
   , PrimBin(..)
+  , PrimCaseUnary(..)
   , PrimCaseBin(..)
   , PrimCaseQuat(..)
   , PrimExn(..)
@@ -45,6 +47,7 @@ import Data.IORef (IORef)
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.Reverse (RList)
+import Data.Sequence (Seq)
 import Data.Symbol (Symbol)
 import Data.Text (Text)
 import Data.Zexpr.Location (Loc)
@@ -62,10 +65,11 @@ data Value
   -- TODO bytestring, (mutable) bytearray types
   | SymVal !Symbol
   -- TODO structural types
-  | ListVal [Value]
+  | ListVal !(Seq Value)
   | LocVal !Loc
   | SexprVal !Sexpr
   | TypeVal !AType
+  | TyconVal !Tycon
   | EnvVal !Env
   | PrimOp !PrimOp
   | PrimAp !PrimAp
@@ -119,12 +123,19 @@ instance NFData AType
 
 data ATypeInfo
   = PrimType !PrimType
-  | UnionTy [AType]
+  | UnionTy (Seq AType)
   -- TODO quantified types, type variables
   -- TODO more structural types
-  | UserType -- TODO I need a lot more inf ohere (a unique id, callability, parameters/arguments, fields, &c)
+  -- TODO | UserType -- TODO I need a lot more inf ohere (a unique id, callability, parameters/arguments, fields, &c)
   deriving (Show,Generic)
 instance NFData ATypeInfo
+
+data Tycon
+  = PrimTycon !PrimType
+  | UnionTycon
+  -- TODO user-defined type constructors
+  deriving (Eq,Show,Generic)
+instance NFData Tycon
 
 ------------------------------------ Thunks ------------------------------------
 
@@ -186,6 +197,8 @@ data PrimAp
   | PrimUnary PrimUnary
   | PrimBin PrimBin
   | PrimBin1 PrimBin (Loc, Value)
+  | PrimCaseUnary PrimCaseUnary
+  | PrimCaseUnary1 PrimCaseUnary (Loc, Value)
   | PrimCaseBin PrimCaseBin
   | PrimCaseBin2 PrimCaseBin (Loc, Value)
   | PrimCaseBin1 PrimCaseBin (Loc, Value) (Loc, Value)
@@ -206,12 +219,18 @@ data PrimUnary
 instance NFData PrimUnary
 
 data PrimBin
-  = PrimAdd
+  = PrimEqual
+  | PrimAdd
   | PrimCons
   | PrimUpdName
   | PrimUpdLoc
   deriving (Show,Generic)
 instance NFData PrimBin
+
+data PrimCaseUnary
+  = PrimTypeElim
+  deriving (Show,Generic)
+instance NFData PrimCaseUnary
 
 data PrimCaseBin
   = PrimUncons
@@ -233,7 +252,7 @@ data PrimExn
   deriving (Show,Generic)
 instance NFData PrimExn
 
--- NOTE These have to type parameters, because I don't want to invent a parameter type for e.g. list litearls
+-- NOTE These have no type parameters, because they also serve as their own type constructors
 data PrimType
   = NilType
   | BoolType
@@ -244,11 +263,12 @@ data PrimType
   | LocType
   | SexprType
   | TypeType
+  | TyconType
   | EnvType
   | FunType
   | ThunkType
-  -- TODO | exception type, somehow
-  deriving (Show,Generic)
+  | PromptType
+  deriving (Eq,Show,Generic)
 instance NFData PrimType
 
 ------------------------------------ Continuations ------------------------------------
@@ -261,7 +281,7 @@ data PushPop = Push | Pop
 data StackItem :: PushPop -> Type where
   Operate :: Loc -- the whole combination
           -> Loc {- operative -}
-          -> [Sexpr]
+          -> Seq Sexpr
           -> StackItem either
   Args :: Loc -- location call was made
        -> Loc {- applicative -}
@@ -295,7 +315,7 @@ data StackItem :: PushPop -> Type where
        -> StackItem 'Pop
   Cond :: Loc {- current predicate -}
        -> Sexpr -- consequent
-       -> [(Sexpr, Sexpr)] -- remaining arcs
+       -> Seq (Sexpr, Sexpr) -- remaining arcs
        -> StackItem either
   -- supporting primitive operatives
   OpDefine :: Env
@@ -303,9 +323,9 @@ data StackItem :: PushPop -> Type where
            -> Symbol
            -> Loc {- definition body -}
            -> StackItem either
-  OpList :: RList Value
+  OpList :: Seq Value
          -> Loc {- current list item -}
-         -> [Sexpr]
+         -> Seq Sexpr
          -> StackItem either
   -- fake stack item used for rendering stack traces, but not actually evaluation
   PrimArg :: Int  -- 1-index into the argument values

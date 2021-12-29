@@ -34,7 +34,7 @@ anemoneMain = do
       hPutStr stderr $ errorBundlePretty err
       exitFailure
     Right vs -> pure vs
-  ((>> putStrLn "") . putDocW 100 . renderPretty . toSexpr defaultConf) `mapM_` vs
+  -- ((>> putStrLn "") . putDocW 100 . renderPretty . toSexpr defaultConf) `mapM_` vs
   env0 <- newDefaultEnv <&> \e -> e{name=Just (intern "__top__")}
   eval (toSexpr defaultConf <$> vs) env0 >>= \case
     Right v -> pPrint v

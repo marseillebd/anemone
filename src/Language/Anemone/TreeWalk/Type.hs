@@ -1,8 +1,12 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module Language.Anemone.TreeWalk.Type
   ( AType(..)
   , ATypeInfo(..)
   , PrimType(..)
   , typeOf
+  , typeElim
+  -- * type representations of primitive
   , primNil
   , primBool
   , primInt
@@ -13,13 +17,18 @@ module Language.Anemone.TreeWalk.Type
   , primSexpr
   , primSexprable
   , primType
+  , primTycon
   , primEnv
   , primFun
   , primThunk
+  , primPrompt
   ) where
 
-import Language.Anemone.TreeWalk.Unsafe.Types (AType(..),ATypeInfo(..),PrimType(..))
+import Data.Sequence (Seq(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (AType(..),ATypeInfo(..),Tycon(..),PrimType(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (Value(..))
+
+import qualified Data.Sequence as Seq
 
 typeOf :: Value -> AType
 typeOf NilVal = primNil
@@ -31,11 +40,19 @@ typeOf (ListVal _) = primList
 typeOf (LocVal _) = primLoc
 typeOf (SexprVal _) = primSexpr
 typeOf (TypeVal _) = primType
+typeOf (TyconVal _) = primTycon
 typeOf (EnvVal _) = primEnv
 typeOf (PrimOp _) = primFun
 typeOf (PrimAp _) = primFun
 typeOf (ClosureVal _) = primFun
 typeOf (ThunkVal _) = primThunk
+typeOf (PrimExn _) = primPrompt
+
+typeElim :: AType -> (Tycon, Seq Value)
+typeElim AType{info} = go info
+  where
+  go (PrimType a) = (PrimTycon a, Empty)
+  go (UnionTy tys) = (UnionTycon, Seq.singleton (ListVal $ TypeVal <$> tys))
 
 primNil :: AType
 primNil = AType { info = PrimType NilType }
@@ -62,10 +79,13 @@ primSexpr :: AType
 primSexpr = AType { info = PrimType SexprType }
 
 primSexprable :: AType
-primSexprable = AType{ info = UnionTy [primInt, primStr, primSym, primList] } -- FIXME the list type here should be parameterized by Sexprable
+primSexprable = AType{ info = UnionTy (Seq.fromList [primInt, primStr, primSym, primList]) } -- FIXME the list type here should be parameterized by Sexprable
 
 primType :: AType
 primType = AType { info = PrimType TypeType }
+
+primTycon :: AType
+primTycon = AType { info = PrimType TyconType }
 
 primEnv :: AType
 primEnv = AType { info = PrimType EnvType }
@@ -75,3 +95,6 @@ primFun = AType { info = PrimType FunType }
 
 primThunk :: AType
 primThunk = AType { info = PrimType ThunkType }
+
+primPrompt :: AType
+primPrompt = AType { info = PrimType PromptType }

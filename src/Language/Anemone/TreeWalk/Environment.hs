@@ -21,10 +21,11 @@ import Data.IORef (newIORef,readIORef,modifyIORef')
 import Data.Symbol.Unsafe (Symbol(..),intern)
 import Language.Anemone.TreeWalk.Unsafe.Types (Env(..),Namespace(..),Binding(..))
 import Language.Anemone.TreeWalk.Value (PrimUnary(..),PrimBin(..))
-import Language.Anemone.TreeWalk.Value (PrimCaseBin(..),PrimCaseQuat(..))
+import Language.Anemone.TreeWalk.Value (PrimCaseUnary(..),PrimCaseBin(..),PrimCaseQuat(..))
 import Language.Anemone.TreeWalk.Value (Value(..),PrimOp(..),PrimAp(..))
 
 import qualified Data.IntMap.Strict as Map
+import qualified Language.Anemone.TreeWalk.Type as Type
 
 
 newEnv :: (MonadIO io) => Maybe Env -> io Env
@@ -58,12 +59,16 @@ newDefaultEnv = do
     , ("__true__", BoolVal True)
     , ("__false__", BoolVal False)
     , ("__cond__", PrimOp PrimCond)
+    , ("__equal__", PrimAp $ PrimBin PrimEqual)
     -- arithmetic
     , ("__add__", PrimAp $ PrimBin PrimAdd)
     -- lists
     , ("__list__", PrimOp PrimList)
+    -- TODO length, index
     , ("__cons__", PrimAp $ PrimBin PrimCons)
     , ("__uncons__", PrimAp $ PrimCaseBin PrimUncons)
+    -- TODO snoc, unsnoc
+    -- TODO cat, split
     -- sexprs
     , ("__sexpr-intro__", PrimAp $ PrimUnary PrimSexprIntro)
     , ("__sexpr-elim__", PrimAp $ PrimCaseQuat PrimSexprElim)
@@ -71,6 +76,9 @@ newDefaultEnv = do
     , ("__sym-elim__", PrimAp $ PrimUnary PrimSymElim)
     -- types
     , ("__typeof__", PrimAp $ PrimUnary PrimTypeOf)
+    , ("__type-elim__", PrimAp $ PrimCaseUnary PrimTypeElim)
+    , ("__tycon-nil__", TypeVal Type.primNil)
+    , ("__tycon-int__", TypeVal Type.primInt)
     -- metadata
     , ("__upd-name__", PrimAp $ PrimBin PrimUpdName)
     , ("__upd-loc__", PrimAp $ PrimBin PrimUpdLoc)
