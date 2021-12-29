@@ -6,7 +6,7 @@ module Language.Anemone.TreeWalk.Type
   , PrimType(..)
   , typeOf
   , typeElim
-  -- * type representations of primitive
+  -- * type representations of primitives
   , primNil
   , primBool
   , primInt
