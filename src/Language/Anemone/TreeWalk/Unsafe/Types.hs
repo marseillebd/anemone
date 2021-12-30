@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -31,6 +32,8 @@ module Language.Anemone.TreeWalk.Unsafe.Types
   , Env(..)
   , Namespace(..)
   , Binding(..)
+  , Name
+  , NameCrumb(..)
   -- * Thunks
   , Thunk(..)
   -- * Continuations
@@ -66,7 +69,6 @@ data Value
   | SymVal !Symbol
   -- TODO structural types
   | ListVal !(Seq Value)
-  | LocVal !Loc
   | SexprVal !Sexpr
   | TypeVal !AType
   | TyconVal !Tycon
@@ -76,6 +78,8 @@ data Value
   | ClosureVal !Closure
   | ThunkVal !Thunk
   | PrimExn !PrimExn
+  | NameVal !Name
+  | LocVal !Loc
   -- TODO Thunk
   -- TODO ADTs/user-defined types, wrapped types (i.e. as close as I can get to Haskell newtype)
   -- TODO mutable cell and array types
@@ -92,7 +96,7 @@ data Callable
 instance NFData Callable
 
 data Closure = Closure
-  { name :: !(Maybe Symbol)
+  { name :: !(Maybe Name)
   , definedAt :: !Loc
   , scope :: !Env
   , args :: !(RList ((Laziness, Symbol), Value))
@@ -115,7 +119,7 @@ instance NFData Laziness
 
 data AType = AType
   { info :: !ATypeInfo -- this determines the identity of a type
-  -- , name :: !Symbol -- FIXME I should define an FQName type around lists of symbols
+  -- , name :: !Name -- FIXME I should define an FQName type around lists of symbols
   -- , definedAt :: !Loc -- TODO
   }
   deriving (Show,Generic)
@@ -153,7 +157,7 @@ instance Show Thunk where
 data Env = Env
   { parent :: !(Maybe Env)
   , namespaces :: !(IORef (IntMap Namespace))
-  , name :: !(Maybe Symbol)
+  , name :: !(Maybe Name)
   , createdAt :: !(Maybe Loc)
   }
   deriving (Generic)
@@ -174,6 +178,16 @@ data Binding = Bound
   }
   deriving (Generic)
 instance NFData Binding
+
+-- basically a list of namespace/variable pairs, each subsequent pair is looked up in the environment bound t othe previous
+type Name = NonEmpty NameCrumb
+
+data NameCrumb = NameCrumb
+  { namespace :: !Symbol
+  , name :: !Symbol
+  }
+  deriving (Eq,Show,Generic)
+instance NFData NameCrumb
 
 ------------------------------------ Primitive Applicatives/Operatives/Exceptions/Types ------------------------------------
 
@@ -215,15 +229,20 @@ data PrimUnary
   | PrimSymIntro
   | PrimSymElim
   | PrimTypeOf
+  | PrimNewEnv
+  | PrimNewEmptyEnv
+  | PrimNameIntro
   deriving (Show,Generic)
 instance NFData PrimUnary
 
 data PrimBin
   = PrimEqual
   | PrimAdd
+  | PrimSub
   | PrimCons
   | PrimUpdName
   | PrimUpdLoc
+  | PrimNameIntro1
   deriving (Show,Generic)
 instance NFData PrimBin
 
@@ -234,6 +253,7 @@ instance NFData PrimCaseUnary
 
 data PrimCaseBin
   = PrimUncons
+  | PrimNameElim
   deriving (Show,Generic)
 instance NFData PrimCaseBin
 
@@ -260,7 +280,6 @@ data PrimType
   | StrType
   | SymType
   | ListType
-  | LocType
   | SexprType
   | TypeType
   | TyconType
@@ -268,6 +287,8 @@ data PrimType
   | FunType
   | ThunkType
   | PromptType
+  | NameType
+  | LocType
   deriving (Eq,Show,Generic)
 instance NFData PrimType
 

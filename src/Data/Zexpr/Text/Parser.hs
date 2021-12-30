@@ -146,15 +146,13 @@ ChainSuffix
 -}
 parseChain :: Parser Zexpr
 parseChain = do
-  pos0 <- MP.getSourcePos
-  dollar_m <- MP.optional $ withLocation (MP.single '$')
-  e0 <- parseSexpr
+  e0 <- do
+    wrap <- MP.optional (withLocation (MP.single '$')) <&> \case
+      Nothing -> id
+      Just (dollarLoc, _) -> ZCombo dollarLoc Dollar
+    wrap <$> parseSexpr
   suffixes <- MP.many $ MP.choice [ call, string, dotted ]
-  loc <- adaptPos pos0 <$> MP.getSourcePos
-  let e = foldl (&) e0 suffixes
-  pure $ case dollar_m of
-    Nothing -> e
-    Just (dollarLoc, _) -> ZCombo loc Round (ZCombo dollarLoc Dollar () :<| e :<| Empty)
+  pure $ foldl (&) e0 suffixes
   where
   call :: Parser (Zexpr -> Zexpr)
   call = do
@@ -334,19 +332,14 @@ parseSquare = do
         loc <- adaptPos pos0 <$> MP.getSourcePos
         pure $ ZCombo loc Square (sqLoc, Empty)
     , do
-        (loc0, es) <- withLocation (NE.toList <$> parseZexprs)
-        MP.choice
-          [ do
-            let e0 = case es of { [it] -> it ; _ -> ZCombo loc0 Round (Seq.fromList es) }
-            es' <- MP.some (comma >> parseZexpr)
-            end
-            loc <- adaptPos pos0 <$> MP.getSourcePos
-            pure $ ZCombo loc Square (sqLoc, Seq.fromList $ e0:es')
-          , do
-              end
-              loc <- adaptPos pos0 <$> MP.getSourcePos
-              pure $ ZCombo loc Square (sqLoc, Seq.fromList es)
-          ]
+        e1 <- withLocation (NE.toList <$> parseZexprs) <&> \(loc, es) ->
+          case es of
+            [it] -> it
+            _ -> ZCombo loc Round (Seq.fromList es)
+        es' <- MP.many (comma >> parseZexpr)
+        end
+        loc <- adaptPos pos0 <$> MP.getSourcePos
+        pure $ ZCombo loc Square (sqLoc, Seq.fromList $ e1:es')
     ]
 
 parseCurly :: Parser (Seq Zexpr)

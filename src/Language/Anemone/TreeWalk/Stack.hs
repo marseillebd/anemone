@@ -22,11 +22,9 @@ module Language.Anemone.TreeWalk.Stack
 
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text.Prettyprint.Doc (Pretty(..),(<+>))
-import Data.Zexpr.Sexpr.Text.Render (renderSymbol)
 import Language.Anemone.TreeWalk.Unsafe.Types (StackItem(..),PushPop(..),ReturnFrom(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (StackTrace(..),TraceItem(..))
-import Language.Anemone.TreeWalk.Value (Closure(..))
-import Language.Anemone.TreeWalk.Value (Control(..))
+import Language.Anemone.TreeWalk.Value (Closure(..),Control(..),renderName)
 
 import qualified Data.List.Reverse as RList
 import qualified Data.Text.Prettyprint.Doc as PP
@@ -133,7 +131,7 @@ instance Pretty StackTrace where
     goExn = PP.nest 2 . PP.vsep $ ["unhandled control raised from" <+> pretty loc, PP.viaShow exn]
     goItem CallTrace{callee=Closure{name,definedAt},calledAt} =
       let nameInfo = case name of
-            Just x -> "function " <> PP.pretty (renderSymbol x)
+            Just x -> "function " <> renderName x
             Nothing -> "anonymous function"
           defLocInfo =  "(" <> pretty definedAt <> ")"
           callSiteInfo = "called at" <+> pretty calledAt

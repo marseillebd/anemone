@@ -13,7 +13,6 @@ module Language.Anemone.TreeWalk.Type
   , primStr
   , primSym
   , primList
-  , primLoc
   , primSexpr
   , primSexprable
   , primType
@@ -22,6 +21,9 @@ module Language.Anemone.TreeWalk.Type
   , primFun
   , primThunk
   , primPrompt
+  , primName
+  , primNameIntroable
+  , primLoc
   ) where
 
 import Data.Sequence (Seq(..))
@@ -37,7 +39,6 @@ typeOf (IntVal _) = primInt
 typeOf (StrVal _) = primStr
 typeOf (SymVal _) = primSym
 typeOf (ListVal _) = primList
-typeOf (LocVal _) = primLoc
 typeOf (SexprVal _) = primSexpr
 typeOf (TypeVal _) = primType
 typeOf (TyconVal _) = primTycon
@@ -47,6 +48,8 @@ typeOf (PrimAp _) = primFun
 typeOf (ClosureVal _) = primFun
 typeOf (ThunkVal _) = primThunk
 typeOf (PrimExn _) = primPrompt
+typeOf (NameVal _) = primName
+typeOf (LocVal _) = primLoc
 
 typeElim :: AType -> (Tycon, Seq Value)
 typeElim AType{info} = go info
@@ -72,9 +75,6 @@ primSym = AType { info = PrimType SymType }
 primList :: AType
 primList = AType { info = PrimType ListType }
 
-primLoc :: AType
-primLoc = AType { info = PrimType LocType }
-
 primSexpr :: AType
 primSexpr = AType { info = PrimType SexprType }
 
@@ -98,3 +98,12 @@ primThunk = AType { info = PrimType ThunkType }
 
 primPrompt :: AType
 primPrompt = AType { info = PrimType PromptType }
+
+primName :: AType
+primName = AType { info = PrimType NameType }
+
+primNameIntroable :: AType
+primNameIntroable = AType { info = UnionTy (Seq.fromList [primSym, primList]) } -- FIXME the list type here should be parameterized by primName
+
+primLoc :: AType
+primLoc = AType { info = PrimType LocType }

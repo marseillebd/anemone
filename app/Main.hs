@@ -5,7 +5,6 @@
 module Main (main) where
 
 import Data.Functor ((<&>))
-import Data.Symbol (intern)
 import Data.Text.Prettyprint.Doc (Pretty(pretty))
 import Data.Text.Prettyprint.Doc.Render.Text (renderIO)
 import Data.Text.Prettyprint.Doc.Util (putDocW)
@@ -16,7 +15,7 @@ import Language.Anemone.TreeWalk.Environment (newDefaultEnv,Env(..))
 import Language.Anemone.TreeWalk.Eval (eval)
 import Language.Anemone.TreeWalk.Stack (makeTrace)
 import System.Exit (exitFailure)
-import System.IO (Handle,stderr,hPutStr,hPutStrLn)
+import System.IO (Handle,stdout,stderr,hPutStr,hPutStrLn)
 import Text.Pretty.Simple (pPrint)
 
 import qualified Data.Text.IO as T
@@ -35,9 +34,11 @@ anemoneMain = do
       exitFailure
     Right vs -> pure vs
   -- ((>> putStrLn "") . putDocW 100 . renderPretty . toSexpr defaultConf) `mapM_` vs
-  env0 <- newDefaultEnv <&> \e -> e{name=Just (intern "__top__")}
+  env0 <- newDefaultEnv <&> \e -> e{name=Nothing}
   eval (toSexpr defaultConf <$> vs) env0 >>= \case
-    Right v -> pPrint v
+    Right v -> do
+      pPrint v
+      hPutPrettyLn stdout v
     Left exn -> do
       -- pPrint exn
       hPutPrettyLn stderr $ makeTrace exn
@@ -68,10 +69,14 @@ lispConf = Conf
   , lensIndexIsOperative = False
   , floatLiteralName = "mk-float"
   , floatLiteralIsOperative = False
-  , overloadedIntegerOperativeName = Just "is-int"
-  , overloadedFloatOperativeName = Just "is-float"
-  , overloadedStringOperativeName = Just "is-string"
-  , overloadedListOperativeName = Just "is-list"
+  , overloadedIntegerName = "is-int"
+  , overloadedIntegerIsOperative = False
+  , overloadedFloatName = "is-float"
+  , overloadedFloatIsOperative = False
+  , overloadedStringName = "is-string"
+  , overloadedStringIsOperative = False
+  , overloadedListName = "is-list"
+  , overloadedListIsOperative = False
   , tickName = "quote"
   , tickIsOperative = False
   , backtickName = "quasiquote"

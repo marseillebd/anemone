@@ -5,9 +5,10 @@
 module Language.Anemone.TreeWalk.Environment
   ( Env(..)
   , Binding(..)
+  , Name
+  , NameCrumb(..)
   , lookup
   , define
-  , valueNamespace
   , newEmptyEnv
   , newDefaultEnv
   , newChild
@@ -19,9 +20,10 @@ import Control.Monad (forM_)
 import Control.Monad.IO.Class (MonadIO,liftIO)
 import Data.IORef (newIORef,readIORef,modifyIORef')
 import Data.Symbol.Unsafe (Symbol(..),intern)
-import Language.Anemone.TreeWalk.Unsafe.Types (Env(..),Namespace(..),Binding(..))
-import Language.Anemone.TreeWalk.Value (PrimUnary(..),PrimBin(..))
+import Language.Anemone.Keywords (valueNamespace)
+import Language.Anemone.TreeWalk.Unsafe.Types (Env(..),Namespace(..),Binding(..),Name,NameCrumb(..))
 import Language.Anemone.TreeWalk.Value (PrimCaseUnary(..),PrimCaseBin(..),PrimCaseQuat(..))
+import Language.Anemone.TreeWalk.Value (PrimUnary(..),PrimBin(..))
 import Language.Anemone.TreeWalk.Value (Value(..),PrimOp(..),PrimAp(..))
 
 import qualified Data.IntMap.Strict as Map
@@ -53,7 +55,6 @@ newDefaultEnv = do
     , ("__force__", PrimAp PrimForce)
     -- sequential programming
     , ("__sequence__", PrimOp PrimSequence)
-    , ("__define-in__", PrimAp PrimDefineIn)
     , ("__define__", PrimOp PrimDefine)
     -- booleans
     , ("__true__", BoolVal True)
@@ -62,6 +63,7 @@ newDefaultEnv = do
     , ("__equal__", PrimAp $ PrimBin PrimEqual)
     -- arithmetic
     , ("__add__", PrimAp $ PrimBin PrimAdd)
+    , ("__sub__", PrimAp $ PrimBin PrimSub)
     -- lists
     , ("__list__", PrimOp PrimList)
     -- TODO length, index
@@ -79,13 +81,17 @@ newDefaultEnv = do
     , ("__type-elim__", PrimAp $ PrimCaseUnary PrimTypeElim)
     , ("__tycon-nil__", TypeVal Type.primNil)
     , ("__tycon-int__", TypeVal Type.primInt)
+    -- environments
+    , ("__new-env!__", PrimAp $ PrimUnary PrimNewEnv)
+    , ("__new-empty-env!__", PrimAp $ PrimUnary PrimNewEmptyEnv)
+    -- TODO __new-empty-env!__
+    , ("__define-in__", PrimAp PrimDefineIn)
     -- metadata
+    , ("__name-intro__", PrimAp $ PrimUnary PrimNameIntro)
+    , ("__name-elim__", PrimAp $ PrimCaseBin PrimNameElim)
     , ("__upd-name__", PrimAp $ PrimBin PrimUpdName)
     , ("__upd-loc__", PrimAp $ PrimBin PrimUpdLoc)
     ]
-
-valueNamespace :: Symbol
-valueNamespace = intern "value"
 
 lookup :: (MonadIO io) => Env -> Symbol -> Symbol -> io (Maybe Binding)
 lookup env0 (Symbol nsId _) (Symbol xId _) = liftIO $ go env0

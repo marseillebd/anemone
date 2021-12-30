@@ -1,0 +1,87 @@
+# What I'm trying to do here is set up a reasonable base environment without
+# polluting the top-level environment (i.e. global definitions bad!). I
+# interchangably call this environment the bootstrap environment, since it
+# defines a lot of what might be considered the core of Anemone
+
+# I've made a concession to readability by defining `__anemone-bsquote`. This
+# abides by the vendor-specific naming conventions I've established, so there
+# shouldn't be a clash when ported to other implementations. However, since it's
+# only used once, in principle it could be inlined.
+
+
+
+# Quote all passed expressions and combine them into a sequence block.
+# It's just
+#     $def (__anemone-bsquote _ _ code) `($__sequence ,@code)
+# but I don't have quasiquote available yet.
+$__define__ __anemone-bsquote: $__lambda__ (env loc code): __sexpr-intro__:
+  __cons__ (__sexpr-intro__: __sym-intro__ "__operate__"):
+    __cons__ (__sexpr-intro__: __sym-intro__ "__sequence__"):
+      code
+
+
+# Of course, the base environment we are defining is bound in the top-level so that it can be accessed by later code at all.
+# Since environments are (append-only) mutated, this statement only creates and binds the environment, but it is still mostly empty.
+# TODO update the name of this environment
+# TODO define this in the 
+$__define__ __anemone-BS: __new-env!__ $($__lambda__ (env loc code) env)
+
+# The key to not polluting the top-level environment is to immediately begin evaluation inside a non-top-level environment.
+# I have chosen to evaluate in a new environment so that I can make local definitions while defining the bootstrap.
+# However, that new environment is also a child of the bootstrap, so definitions exproted to the bootstrap can be immediately used here.
+__eval__ (__new-env!__ __anemone-BS): $__anemone-bsquote:
+
+  # Look, I'm already tired of writing dunders.
+  # These are just to help me make the very first definitions though.
+  # I want to set up metadata correctly for exported values, and these functions don't do that.
+  $__define__ def __define__
+  $def fn __lambda__
+  $def const: $fn ((~ x) ign) x
+
+  # In what comes next, I'll be frequently disassembling lists of s-exprs.
+  # This serves as a crude list pattern match.
+  $def from-ntup: $fn (n0 tup0 ok (~ bad)): $__sequence__:
+    $def loop: $fn (n tup k):
+      $__cond__:
+        {n __equal__ 0} :: __uncons__ tup:
+          const k
+          $fn (x xs): __force__ bad
+        __true__ :: __uncons__ tup:
+          const: __force__ bad
+          $fn (x xs): loop {n __sub__ 1} xs (k x)
+    loop n0 tup0 ok
+
+  # Likewise, I could use a way to extract a symbol from an s-expr.
+  $def sexpr->sym: $fn (expr (~ bad)): __sexpr-elim__ expr:
+    const bad
+    const bad
+    $fn (x) x
+    const bad
+
+  # The first order of business is to create a function that helps attach
+  # metadata to our definitions when we add them to the bootstrap environment.
+  $def export: $fn (env loc lst): $__sequence__:
+    $def badSyntax: $fn (msg): raise SyntaxExn #TODO
+    from-ntup 3 lst:
+      $fn (a b c): $__sequence__:
+        $def ns: sexpr->sym a (badSyntax "expecting namespace symbol")
+        $def x: sexpr->sym b (badSyntax "expecting name symbol")
+        $def name: __name-intro__ ns x
+        $def value: __eval__ env c
+        __define-in__ __anemone-BS ns x:
+          __upd-name__ name: __upd-loc__ loc: value
+      badSyntax "expecting namespace, name, and body"
+
+
+  $export value test ($fn (x) x)
+
+  # TODO before defining quotation, I'd like to be able to raise real syntax errors on my own
+  # $def __quote__: $fn (env loc codes):
+  #   __uncons__ codes:
+  #     $fn (nil): raise SyntaxExn TODO
+  #     $fn (code rest): __uncons__ rest:
+  #       $fn (nil): code
+  #       $fn (more0 more): raise SyntaxExn TODO
+
+__eval__ __anemone-BS: $__anemone-bsquote:
+  test

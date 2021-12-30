@@ -18,7 +18,7 @@ data Zexpr where
   ZCombo :: Loc -> Combine subexprs -> subexprs -> Zexpr
 
 data Combine subexpr where
-  Dollar :: Combine ()
+  Dollar :: Combine Zexpr
   QualName :: Combine (Seq (Loc, Symbol))
   Round :: Combine (Seq Zexpr)
   Square :: Combine (Loc, (Seq Zexpr))
