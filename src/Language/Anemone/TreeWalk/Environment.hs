@@ -27,6 +27,7 @@ import Language.Anemone.TreeWalk.Value (PrimUnary(..),PrimBin(..))
 import Language.Anemone.TreeWalk.Value (Value(..),PrimOp(..),PrimAp(..))
 
 import qualified Data.IntMap.Strict as Map
+import qualified Data.IntSet as Set
 import qualified Language.Anemone.TreeWalk.Type as Type
 
 
@@ -55,7 +56,7 @@ newDefaultEnv = do
     , ("__force__", PrimAp PrimForce)
     -- sequential programming
     , ("__sequence__", PrimOp PrimSequence)
-    , ("__define__", PrimOp PrimDefine)
+    , ("__defineHere__", PrimOp PrimDefineHere)
     -- booleans
     , ("__true__", BoolVal True)
     , ("__false__", BoolVal False)
@@ -83,9 +84,9 @@ newDefaultEnv = do
     , ("__tycon-int__", TypeVal Type.primInt)
     -- environments
     , ("__new-env!__", PrimAp $ PrimUnary PrimNewEnv)
-    , ("__new-empty-env!__", PrimAp $ PrimUnary PrimNewEmptyEnv)
-    -- TODO __new-empty-env!__
-    , ("__define-in__", PrimAp PrimDefineIn)
+    , ("__new-emptyEnv!__", PrimAp $ PrimUnary PrimNewEmptyEnv)
+    , ("__lookup__", PrimAp PrimLookup)
+    , ("__define__", PrimAp PrimDefine)
     -- metadata
     , ("__name-intro__", PrimAp $ PrimUnary PrimNameIntro)
     , ("__name-elim__", PrimAp $ PrimCaseBin PrimNameElim)
@@ -106,20 +107,54 @@ lookup env0 (Symbol nsId _) (Symbol xId _) = liftIO $ go env0
     Nothing -> pure Nothing
     Just p -> go p
 
-define :: (MonadIO io) => Env -> Symbol -> Symbol -> Value -> io ()
-define env ns x v = lookup env ns x >>= \case
-  Nothing -> unsafeDefine env ns x v
-  Just _ -> error $ "unimplemented: redefinition error " ++ show x
+-- return True on success
+define :: (MonadIO io) => Env -> Symbol -> Symbol -> Value -> io Bool
+define env ns x@(Symbol xId _) v = do
+  Ns{bindings,reserved} <- ensureNamespace env ns
+  inBindings <- Map.lookup xId <$> liftIO (readIORef bindings)
+  inReserved <- Set.member xId <$> liftIO (readIORef reserved)
+  case (inBindings, inReserved) of
+    (Nothing, False) -> do
+      reserveSuccess <- reserve (parent env) ns x
+      if reserveSuccess
+      then do
+        liftIO $ modifyIORef' bindings $ Map.insert xId Bound{name=x,value=v}
+        pure True
+      else pure False
+    (_, _) -> pure False
+
+-- reserve the name in this namespace and all parents
+-- return True on success
+reserve :: (MonadIO io) => Maybe Env -> Symbol -> Symbol -> io Bool
+reserve Nothing _ _ = pure True
+reserve (Just env0) ns (Symbol xId _) = loop env0
+  where
+  loop env = do
+    Ns{bindings,reserved} <- ensureNamespace env ns
+    inBindings <- Map.lookup xId <$> liftIO (readIORef bindings)
+    inReserved <- Set.member xId <$> liftIO (readIORef reserved)
+    case (inBindings, inReserved) of
+      (Just _, _) -> pure False
+      -- if it was reserved in this env, then it was reserved in the parents, and therefore not bound in the parents either
+      (Nothing, True) -> pure True
+      (Nothing, False) -> do
+        liftIO $ modifyIORef' reserved $ Set.insert xId
+        maybe (pure True) loop (parent env)
+
+ensureNamespace :: (MonadIO io) => Env -> Symbol -> io Namespace
+ensureNamespace env ns@(Symbol nsId _) =
+  Map.lookup nsId <$> liftIO (readIORef $ namespaces env) >>= \case
+    Just namespace -> pure namespace
+    Nothing -> liftIO $ do
+      bindings <- newIORef Map.empty
+      reserved <- newIORef Set.empty
+      let namespace = Ns{name=ns,bindings,reserved}
+      modifyIORef' (namespaces env) $ Map.insert nsId namespace
+      pure namespace
 
 unsafeDefine :: (MonadIO io) => Env -> Symbol -> Symbol -> Value -> io ()
-unsafeDefine env ns@(Symbol nsId _) x@(Symbol xId _) v = liftIO $ do
-  Map.lookup nsId <$> readIORef (namespaces env) >>= \case
-    Just namespace -> bind namespace
-    Nothing -> do
-      bindings <- newIORef Map.empty
-      let namespace = Ns{name=ns,bindings}
-      modifyIORef' (namespaces env) $ Map.insert nsId namespace
-      bind namespace
+unsafeDefine env ns x@(Symbol xId _) v = liftIO $ do
+  bind =<< ensureNamespace env ns
   where
-  bind namespace = modifyIORef' (bindings namespace) $
+  bind namespace = liftIO $ modifyIORef' (bindings namespace) $
     Map.insert xId Bound{name=x,value=v}

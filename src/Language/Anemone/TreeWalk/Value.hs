@@ -107,7 +107,7 @@ instance Pretty Value where
   pretty (LocVal l) = "<location " <> pretty l <> ">"
 
 renderName :: Name -> Doc ann
-renderName crumbs = 
+renderName crumbs =
   let lead = (prettyCrumb <$> NE.init crumbs)
    in PP.encloseSep "" "" ":" $ lead <> [prettyLast (NE.last crumbs)]
   where

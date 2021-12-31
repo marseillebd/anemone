@@ -46,6 +46,7 @@ module Language.Anemone.TreeWalk.Unsafe.Types
 
 import Control.DeepSeq (NFData)
 import Data.IntMap.Strict (IntMap)
+import Data.IntSet (IntSet)
 import Data.IORef (IORef)
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
@@ -163,11 +164,12 @@ data Env = Env
   deriving (Generic)
 instance NFData Env
 instance Show Env where
-  show _ = "<Env>"
+  show Env{name} = "<Env " ++ show name ++ ">"
 
 data Namespace = Ns
   { name :: !Symbol
   , bindings :: !(IORef (IntMap Binding))
+  , reserved :: !(IORef IntSet)
   }
   deriving (Generic)
 instance NFData Namespace
@@ -194,7 +196,7 @@ instance NFData NameCrumb
 data PrimOp
   = PrimLambda
   | PrimSequence
-  | PrimDefine
+  | PrimDefineHere
   | PrimList
   | PrimCond
   deriving (Show,Generic)
@@ -203,10 +205,13 @@ instance NFData PrimOp
 data PrimAp
   = PrimEval
   | PrimEval1 (Loc, Env)
-  | PrimDefineIn
-  | PrimDefineIn3 (Loc, Env)
-  | PrimDefineIn2 (Loc, Env) (Loc, Symbol)
-  | PrimDefineIn1 (Loc, Env) (Loc, Symbol) (Loc, Symbol)
+  | PrimDefine
+  | PrimDefine3 (Loc, Env)
+  | PrimDefine2 (Loc, Env) (Loc, Symbol)
+  | PrimDefine1 (Loc, Env) (Loc, Symbol) (Loc, Symbol)
+  | PrimLookup
+  | PrimLookup2 (Loc, Env)
+  | PrimLookup1 (Loc, Env) (Loc, Symbol)
   | PrimForce
   | PrimUnary PrimUnary
   | PrimBin PrimBin
@@ -263,7 +268,7 @@ data PrimCaseQuat
 instance NFData PrimCaseQuat
 
 data PrimExn
-  = ScopeExn Symbol Symbol -- first namespace then name
+  = ScopeExn Env Name
   | SyntaxExn Sexpr Text
   | UncallableExn Value
   | UnexpectedOperative Callable
@@ -339,7 +344,7 @@ data StackItem :: PushPop -> Type where
        -> Seq (Sexpr, Sexpr) -- remaining arcs
        -> StackItem either
   -- supporting primitive operatives
-  OpDefine :: Env
+  OpDefineHere :: Env
            -> Loc
            -> Symbol
            -> Loc {- definition body -}

@@ -94,7 +94,7 @@ remergePop (Then stmtLoc stmt) = unsafePop >>= \case
   Just k -> push k >> pure (Sequence stmtLoc (stmt :| []))
   Nothing -> pure $ Sequence stmtLoc (stmt :| [])
 remergePop (Cond pLoc c arcs) = pure $ Cond pLoc c arcs
-remergePop (OpDefine env loc x bodyLoc) = pure $ OpDefine env loc x bodyLoc
+remergePop (OpDefineHere env loc x bodyLoc) = pure $ OpDefineHere env loc x bodyLoc
 remergePop (OpList vs itemLoc sexprs) = pure $ OpList vs itemLoc sexprs
 remergePop (PrimArg n calledAt f vs) = pure $ PrimArg n calledAt f vs
 

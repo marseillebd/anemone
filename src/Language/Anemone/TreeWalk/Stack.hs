@@ -64,8 +64,8 @@ pop (Stack (Sequence stmtLoc (stmt:|stmts) : ks)) = case stmts of
   (s:ss) -> (Just $ Then stmtLoc stmt, Stack (Sequence (Sexpr.loc s) (s:|ss) : ks))
 pop (Stack (Cond pLoc c arcs : ks)) =
   (Just $ Cond pLoc c arcs, Stack ks)
-pop (Stack ((OpDefine env loc x bodyLoc) : ks)) =
-  (Just $ OpDefine env loc x bodyLoc, Stack ks)
+pop (Stack ((OpDefineHere env loc x bodyLoc) : ks)) =
+  (Just $ OpDefineHere env loc x bodyLoc, Stack ks)
 pop (Stack ((OpList vs itemLoc es) : ks)) =
   (Just $ OpList vs itemLoc es, Stack ks)
 pop (Stack ((PrimArg n calledAt f args) : ks)) =
@@ -87,7 +87,7 @@ toPush (Restore from env) = Restore from env
 toPush (Sequence stmtLoc nexts) = Sequence stmtLoc nexts
 toPush (Then stmtLoc next) = Sequence stmtLoc (next :| [])
 toPush (Cond pLoc c arcs) = Cond pLoc c arcs
-toPush (OpDefine env loc x bodyLoc) = OpDefine env loc x bodyLoc
+toPush (OpDefineHere env loc x bodyLoc) = OpDefineHere env loc x bodyLoc
 toPush (OpList vs itemLoc sexprs) = OpList vs itemLoc sexprs
 toPush (PrimArg n calledAt f args) = PrimArg n calledAt f args
 
@@ -121,7 +121,7 @@ makeTrace (PrimCtrl stack exn) = StackTrace (RList.catMaybes $ go <$> stack) exn
   go (Sequence _ _) = Nothing
   go (Then _ _) = Nothing
   go (Cond _ _ _) = Nothing
-  go (OpDefine _ _ _ _) = Nothing
+  go (OpDefineHere _ _ _ _) = Nothing
   go (OpList _ _ _) = Nothing
   go (PrimArg argNum calledAt primFunc _) = Just $ PrimArgTrace{argNum,calledAt,primFunc}
 

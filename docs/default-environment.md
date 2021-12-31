@@ -37,22 +37,20 @@ Portable Anemone code need not consider such implementations, as they are (read:
 
 ## Core Features
 
-### `__lambda__`
+### `($__lambda__ (,parameter ,@parameter) ,sexpr:body)`
+
+Supporting syntax:
+```
+parameter ::= ,symbol      ⇒ strict
+           |  (~ ,symbol)  ⇒ lazy
+```
 
 Ah, the classic λ!, with this, Anemone is already Turing-complete!
 
 `__lambda__` is an operative with creates closure values.
-The static environment is just the current environment.
+The resulting closure's static environment is just the current environment.
 It does not set the name of the closure, but does set the location as the location of the operative call.
 
-Syntax:
-```
-__lambda__ parameters <sexpr:body>
-
-parameters ::= (parameter parameter …)
-parameter ::= <symbol>      ⇒ strict
-           |  (~ <symbol>)  ⇒ lazy
-```
 
 A closure understands that its parameters are either strict or lazy.
 When an argument is passed to a closure whose next parameter is strict, the argument is evaluated before passing (note that thunks are first-class, and so if an argument evaluates to a thunk, it is not forced).
@@ -62,15 +60,15 @@ Recall that every function in Anemone takes exactly one argument.
 This is why `parameters` cannot be empty.
 The allowance for defining multiple parameters at once is so that implementations can (as an optimization) implement closures that aggregate multiple curried arguments and create a single callee environment for all of them, rather than a new environment for each argument.
 
-### `__eval__`
+### `(__eval__ env sexpr)`
 
 Ah, the magic of eval!, and now we have a Lisp!
 
-`__eval__` is a function which takes an environment and an s-expressions.
+`__eval__` is a function which takes an environment and an s-expression.
 It evaluates the s-expression in the environment, and returns the result.
 Control operations escape from invocations of eval.
 
-### `__force__`
+### `(__force__ value)`
 
 Since we have first-class thunks, we also need a way to force these thunks.
 
@@ -89,32 +87,42 @@ If alternate semantics are desired (e.g. do not save the result, lock the thunk 
 
 ## Sequential Programming
 
-### `__sequence__` TODO
-### `__define-in__` TODO
-### `__define__` TODO
+### `($__sequence__ ,@sexpr:stmt)`
 
-I think this could be defined in terms of `__define-in__`, but it would be more tedium than it's likely worth.
+Evaluate each statement in-order and reduces to the result of the last.
+If there are no statements, then just reduces to nil.
+
+### `($__defineHere__ ,symbol:ident ,sexpr:body)`
+
+Evaluate `body` to a value, and bind it to `ident` in the the `value` namespace of the current environment.
+Reduces to the value of the body.
+
+I think this could be defined in terms of `__define-in__`, but without a way to pattern-match s-expressions, it would be more tedium than it's likely worth.
+Thus, I've included it in the default environment
+For reference, it would be equivalent to:
+```
+$__lambda__ (env loc `(,<symbol:ident> ,<sexpr:body>)):
+  __define__ env (__sym-intro__ "value") ident (__eval__ env body)
+```
 
 ## Booleans
 
 ### `__true__` and `__false__`
 
-The two boolean values.
+The two boolean values
 
-TODO I suppose I could eliminate these with `$__define__ __true__ {0 __equal__ 0}` and `$__define__ __false__ {0 __equal__ 1}`
+TODO I suppose I could eliminate these with `$__defineHere__ __true__ {0 __equal__ 0}` and `$__defineHere__ __false__ {0 __equal__ 1}`
 
-### `__cond__`
+### `($__cond__ ,@arc)`
 
-Syntax:
+Supporting syntax:
 ```
-(__cond__ arc …)
-
-arc ::= (<sexpr:predicate> <sexpr:consequent>)
+arc ::= (,sexpr:predicate ,sexpr:consequent)
 ```
 
 Each arc is visited in-order:
-  * The `predicate` expression is evaluated to a boolean value.
-  * If that predicate is true, then the result of the expression is the evaluation of the `consequent`.
+  * The `predicate` expression is evaluated to a boolean value
+  * If that predicate is true, then the result of the expression is the evaluation of the `consequent`
 If none of the arcs' `predicate`s are true, then the result is the nil value.
 Note that a `__cond__` with zero arcs is allowed, and will always evaluate to nil.
 
@@ -149,16 +157,69 @@ Lists probably I should just do it for speed.
 For sexprs though, the question is whether I should also check the locations for equality; my instinct is not.
 Doing either clashes with the "quick in-and-out" philosophy, but maybe that philosophy is bunk.
 
-## Arithmetic TODO
+## Arithmetic
 
-## Lists TODO
+### `(__add__ a b)`, `(__sub__ a b)` TODO
+
+## Lists
+
+### `($__list__ ,@sexpr)`
+
+Create a list value whose elements are the evaluation results of the s-expressions.
+
+This syntax is targeted by z-expression square-bracket syntax.
+
+### `(__cons__ x xs)`
+
+Create a new list which has the element `x` pushed on the from of `xs`.
+
+### `(__uncons__ lst onNil onCons)`
+
+If the list `lst` is empty, evaluate `onNil ()`.
+Otherwise, `lst` must be of the form `(__cons__ x xs)`; evaluate `onCons x xs`.
 
 ## S-Expressions TODO
 
+S-expressions are abstract types in Anemone, which is an unusual choice for a lisp.
+Other lisps (that I know of) treat s-expressions as equivalent to various types (integers
+That is to say, the injections
+  from values of type integer, string, symbol, and list of s-expressions
+  into values of type s-expression
+  is implicit.
+In anemone, the injection must be explicitly made.
+This allows the representation of s-expressions by the interpreter to be altered without affecting user code.
+
+I also believe that it makes it much more difficult to confuse the object-language with the meta-language.
+In languages as meta as lisps, explicit injections are likely to detect bugs due to this confusion.
+In any case, these primitives will likely only be used in quasiquotation and similar syntaxes, and mostly not used directly.
+
+### `(__sexpr-intro__ x)`
+
+Call with an integer, string, or symbol to create the corresponding atom.
+Call with a list of s-expressions to create a combination.
+
+### `(__sexpr-elim__ sexpr onInt onStr onSym onCombo)`
+
+Calls one of the `on*` functions based on the construction of the `sexpr`.
+  * evaluate `(onInt n)` if `sexpr` is an integer atom containing `n`
+  * evaluate `(onStr s)` if `sexpr` is a string atom containing `s`
+  * evaluate `(onSym x)` if `sexpr` is a symbol atom containing `x`
+  * evaluate `(onCombo sexprs)` if `sexpr` is a combination containing the list `sexprs`
+
+### `(__sym-intro__ str)`
+
+Create a symbol from a string.
+All symbols created from the same string are equal.
+
+### `(__sym-elim__ sym)`
+
+Retrieve the string which created the symbol.
+
 ## Types
 
-### `__typeof__` TODO
-### TODO some way to get the type constructor and type arguments of a type
+### `(__typeof__ value)`
+
+Return the type of the passed value.
 
 ### `(__type-elim__ ty k)`
 
@@ -169,4 +230,69 @@ The return value is the return value of `k`.
 
 ### TODO type constructor values
 
-## Metadata TODO
+`__tycon-nil__` `__tycon-int__`
+
+## Environments
+
+### `(__new-env!__ parent)`, `(__new-emptyEnv!__ ())`
+
+Create a new environment which is either the child of the `parent` environment, or else has no parent.
+
+Despite environments being append-only, each call to one of these functions produces a different value from other ones.
+That is, they cannot be naïvely substituted for a variable used multiple times, and are thus not pure.
+
+### `(__lookup__ env namespace ident)`
+
+Retrieve the value bound to `ident` in the `namespace` of the `env` environment.
+
+TODO there's a question of purity here
+
+### `(__define__ env namespace identifier value)`
+
+Binds the `identifier` to `value` in the `namespace` namespace of the `env` environment.
+Both `namespace` and `identifier` must be symbol values.
+Returns `value`.
+
+Note that Anemone has strict rules about identifiers being shadowed, which allows optimizers to understand the code more fully.
+Bindings cannot be overwritten, nor can they shadow bindings from parent environments.
+Furthermore, once a binding has been created in a child environment, it is "reserved" in all its ancestors.
+Attempting to write a binding into an environment which already has that name reserved is an error, as that would create shadowing.
+
+## Metadata
+
+In most languages, the names and locations describing the definition of certain objects is generated automatically.
+In a language as meta as Anemone however, such automatic generation might not do a good job of describing the values they are attached to.
+
+Names consist of a non-empty sequence of name crumbs, where each name crumb is a pair of symbols, one for the namespace and one for the identifier.
+While name has is its own independent type, a name crumb is simply a singleton name.
+When a name is not a singleton, we call it a name trail.
+
+Locations can be either known or unknown.
+Known locations consist of a filename, start line/col, and end line/column.
+
+
+### `(__name-intro__ namespace ident)`, `(__name-intro__ names)`
+
+Create either a name crumb from two symbols, or conjoin a non-empty list of names into a single name.
+
+### `(__name-elim__ name onTrail onCrumb)`
+
+If the passed name is a trail, call `onTrail` with the list of crumbs that constituted it.
+If the passed name is a crumb, call `onCrumb` with the namespace and identifier of the crumb.
+
+### `(__upd-name__ name value)` `(__upd-loc__ loc value)`
+
+Update the name or location of a value.
+Note that these are pure updates rather than mutations, so a value may be assigned different names in different contexts.
+E.g. it may have a qualified name if accessed through an imported module, but a simple name if the value is imported directly.
+
+The primitive types which support names are:
+  * closures,
+  * environments.
+
+The primitive types which support locations are:
+  * s-expressions
+  * closures,
+  * environments.
+
+If a value does not support names or locations, calls to the corresponding update functions return the original value unmodified.

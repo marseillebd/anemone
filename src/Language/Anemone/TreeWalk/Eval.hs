@@ -13,6 +13,7 @@ module Language.Anemone.TreeWalk.Eval
   ( eval
   ) where
 
+import Prelude hiding (lookup)
 
 import Control.DeepSeq (force)
 import Control.Monad (forM_,join)
@@ -24,7 +25,7 @@ import Data.IORef (newIORef,readIORef,writeIORef)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Reverse (RList,snoc)
 import Data.Sequence (Seq(..))
-import Data.Symbol (intern,unintern)
+import Data.Symbol (Symbol,intern,unintern)
 import Data.Zexpr.Location (Loc(..))
 import Data.Zexpr.Sexpr (Atom(..),Sexpr(..))
 import Language.Anemone.TreeWalk.Environment (Env(..),Binding(..),NameCrumb(..))
@@ -66,9 +67,7 @@ elaborate = \case
   SAtom _ (Str s) -> val $ StrVal s
   SAtom loc (Sym x) -> do
     env0 <- currentEnv
-    Env.lookup env0 Keyword.valueNamespace x >>= \case
-      Just Bound{value} -> val value
-      Nothing -> ctrl $ PrimCtrl R.nil (loc, ScopeExn Keyword.valueNamespace x)
+    lookup loc env0 Keyword.valueNamespace x
   SCombo _ Empty -> val NilVal
   combo@(SCombo invokedAt (SAtom _ (Sym operate_m) :<| args0))
     | operate_m == Keyword.operate -> case args0 of
@@ -80,6 +79,12 @@ elaborate = \case
   SCombo loc (f:<|arg:<|args) -> do
     push $ Args loc (Sexpr.loc f) (arg:|toList args)
     elaborate f
+
+lookup :: Loc -> Env -> Symbol -> Symbol -> Eval (Either Control Value)
+lookup varAt env namespace name = do
+  Env.lookup env namespace name >>= \case
+    Just Bound{value} -> val value
+    Nothing -> ctrl $ PrimCtrl R.nil (varAt, ScopeExn env $ NameCrumb{namespace,name} :| [])
 
 reduce :: StackItem 'Pop -> Either Control Value -> Eval (Either Control Value)
 reduce k (Right v) = case k of
@@ -125,9 +130,10 @@ reduce k (Right v) = case k of
         push $ Cond (Sexpr.loc p') c' arcs'
         elaborate p'
     _ -> ctrl $ PrimCtrl (R.singleton $ Stack.toPush k) (pLoc, TypeError Ty.primBool v)
-  OpDefine inEnv _ x _ -> do
-    Env.define inEnv Keyword.valueNamespace x v
-    val v
+  OpDefineHere inEnv _ x _ ->
+    Env.define inEnv Keyword.valueNamespace x v >>= \case
+      True -> val v
+      False -> error $ "unimplemented: redefinition (or shadowing) error " ++ show x -- TODO
   OpList vs _ Empty -> val $ ListVal (vs :|> v)
   OpList vs _ (e:<|es) -> do
     push $ OpList (vs :|> v) (Sexpr.loc e) es
@@ -149,18 +155,28 @@ apply _ calledAt (CallPrim (PrimEval1 envArg@(_, evaleeEnv))) b = case b of
     enterEnv trace evaleeEnv
     elaborate evalee
   _ -> raisePrimArg 2 calledAt PrimEval (second EnvVal envArg:|[b]) (TypeError Ty.primSexpr (snd b))
-apply _ calledAt (CallPrim PrimDefineIn) a = case a of
-  (envLoc, EnvVal inEnv) -> val $ PrimAp (PrimDefineIn3 (envLoc, inEnv))
-  _ -> raisePrimArg 1 calledAt PrimDefineIn (a:|[]) (TypeError Ty.primEnv (snd a))
-apply _ calledAt (CallPrim (PrimDefineIn3 inEnv)) b = case b of
-  (nsLoc, SymVal ns) -> val $ PrimAp (PrimDefineIn2 inEnv (nsLoc, ns))
-  _ -> raisePrimArg 2 calledAt PrimDefineIn (second EnvVal inEnv:|[b]) (TypeError Ty.primSym (snd b))
-apply _ calledAt (CallPrim (PrimDefineIn2 inEnv ns)) c = case c of
-  (xLoc, SymVal x) -> val $ PrimAp (PrimDefineIn1 inEnv ns (xLoc, x))
-  _ -> raisePrimArg 3 calledAt PrimDefineIn (second EnvVal inEnv:|[second SymVal ns,c]) (TypeError Ty.primSym (snd c))
-apply _ _ (CallPrim (PrimDefineIn1 (_, inEnv) (_, ns) (_, x))) (_, v) = do
-  Env.define inEnv ns x v
-  val v
+apply _ calledAt (CallPrim PrimLookup) a = case a of
+  (envLoc, EnvVal inEnv) -> val $ PrimAp (PrimLookup2 (envLoc, inEnv))
+  _ -> raisePrimArg 1 calledAt PrimLookup (a:|[]) (TypeError Ty.primEnv (snd a))
+apply _ calledAt (CallPrim (PrimLookup2 inEnv)) b = case b of
+  (nsLoc, SymVal ns) -> val $ PrimAp (PrimLookup1 inEnv (nsLoc, ns))
+  _ -> raisePrimArg 2 calledAt PrimLookup (second EnvVal inEnv:|[b]) (TypeError Ty.primSym (snd b))
+apply _ calledAt (CallPrim (PrimLookup1 inEnv ns)) c = case c of
+  (_, SymVal x) -> lookup calledAt (snd inEnv) (snd ns) x
+  _ -> raisePrimArg 3 calledAt PrimLookup (second EnvVal inEnv:|[second SymVal ns,c]) (TypeError Ty.primSym (snd c))
+apply _ calledAt (CallPrim PrimDefine) a = case a of
+  (envLoc, EnvVal inEnv) -> val $ PrimAp (PrimDefine3 (envLoc, inEnv))
+  _ -> raisePrimArg 1 calledAt PrimDefine (a:|[]) (TypeError Ty.primEnv (snd a))
+apply _ calledAt (CallPrim (PrimDefine3 inEnv)) b = case b of
+  (nsLoc, SymVal ns) -> val $ PrimAp (PrimDefine2 inEnv (nsLoc, ns))
+  _ -> raisePrimArg 2 calledAt PrimDefine (second EnvVal inEnv:|[b]) (TypeError Ty.primSym (snd b))
+apply _ calledAt (CallPrim (PrimDefine2 inEnv ns)) c = case c of
+  (xLoc, SymVal x) -> val $ PrimAp (PrimDefine1 inEnv ns (xLoc, x))
+  _ -> raisePrimArg 3 calledAt PrimDefine (second EnvVal inEnv:|[second SymVal ns,c]) (TypeError Ty.primSym (snd c))
+apply _ _ (CallPrim (PrimDefine1 (_, inEnv) (_, ns) (_, x))) (_, v) =
+  Env.define inEnv ns x v >>= \case
+    True -> val v
+    False -> error $ "unimplemented: redefinition (or shadowing) error " ++ show x -- TODO
 apply _ forcedAt (CallPrim PrimForce) (_, v) = case v of
   ThunkVal thunk@Thunk{cell} -> liftIO (readIORef cell) >>= \case
     Left (thunkeeEnv, thunkee) -> do
@@ -243,15 +259,15 @@ operate _ (_, OperPrim PrimLambda) env loc sexprs = case sexprs of
       -- however, this need not be a feature of the core, but can be implemented in anemone itself
       | laziness == intern "~" = Right (Lazy, x)
     go1 nonParam = Left (Sexpr.loc nonParam, SyntaxExn nonParam "expecting parameter")
-operate _ (_, OperPrim PrimSequence) _ loc sexprs = case sexprs of
-  Empty -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting one or more statements")
+operate _ (_, OperPrim PrimSequence) _ _ sexprs = case sexprs of
+  Empty -> val NilVal
   stmt:<|Empty -> elaborate stmt
   stmt:<|s:<|ss -> do
     push $ Sequence (Sexpr.loc stmt) (s:|toList ss)
     elaborate stmt
-operate _ (_, OperPrim PrimDefine) env loc sexprs = case sexprs of
+operate _ (_, OperPrim PrimDefineHere) env loc sexprs = case sexprs of
   SAtom _ (Sym x) :<| body :<| Empty -> do
-    push $ OpDefine env loc x (Sexpr.loc body)
+    push $ OpDefineHere env loc x (Sexpr.loc body)
     elaborate body
   Empty -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting symbol")
   _:<|Empty -> ctrl $ PrimCtrl R.nil (loc, SyntaxExn (SCombo loc sexprs) "expecting definition body")
