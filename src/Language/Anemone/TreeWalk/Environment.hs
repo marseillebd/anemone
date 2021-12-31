@@ -87,6 +87,9 @@ newDefaultEnv = do
     , ("__new-emptyEnv!__", PrimAp $ PrimUnary PrimNewEmptyEnv)
     , ("__lookup__", PrimAp PrimLookup)
     , ("__define__", PrimAp PrimDefine)
+    -- first-class control
+    , ("__raise__", PrimAp $ PrimUnary PrimRaise) -- TODO though a primitive raise likely also needs a continuation for re-raising/continuing a raise
+    , ("__syntaxErr-intro__", PrimAp $ PrimBin PrimSyntaxErrIntro)
     -- metadata
     , ("__name-intro__", PrimAp $ PrimUnary PrimNameIntro)
     , ("__name-elim__", PrimAp $ PrimCaseBin PrimNameElim)
@@ -138,8 +141,12 @@ reserve (Just env0) ns (Symbol xId _) = loop env0
       -- if it was reserved in this env, then it was reserved in the parents, and therefore not bound in the parents either
       (Nothing, True) -> pure True
       (Nothing, False) -> do
-        liftIO $ modifyIORef' reserved $ Set.insert xId
-        maybe (pure True) loop (parent env)
+        reserveSuccess <- maybe (pure True) loop (parent env)
+        if reserveSuccess
+        then do
+          liftIO $ modifyIORef' reserved $ Set.insert xId
+          pure True
+        else pure False
 
 ensureNamespace :: (MonadIO io) => Env -> Symbol -> io Namespace
 ensureNamespace env ns@(Symbol nsId _) =

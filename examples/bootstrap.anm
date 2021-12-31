@@ -1,59 +1,73 @@
 # What I'm trying to do here is set up a reasonable base environment without
 # polluting the top-level environment (i.e. global definitions bad!). I
 # interchangably call this environment the bootstrap environment, since it
-# defines a lot of what might be considered the core of Anemone
+# defines a lot of what might be considered the core of Anemone.
 
+# TODO does this actually abide by it?
 # I've made a concession to readability by defining `__anemone-bsquote`. This
 # abides by the vendor-specific naming conventions I've established, so there
 # shouldn't be a clash when ported to other implementations. However, since it's
 # only used once, in principle it could be inlined.
-
-
 
 # Quote all passed expressions and combine them into a sequence block.
 # It's just
 #     $def (__anemone-bsquote _ _ code) `($__sequence__ ,@code)
 # but I don't have quasiquote available yet.
 $__defineHere__ __anemone-bsquote: $__lambda__ (env loc code): __sexpr-intro__:
+  # Notice how decorator syntax can smush down excessive indentation.
   @__cons__ (__sexpr-intro__: __sym-intro__ "__operate__")
   @__cons__ (__sexpr-intro__: __sym-intro__ "__sequence__")
   code
 
-
-
-
-
-# Of course, the base environment we are defining is bound in the top-level so that it can be accessed by later code at all.
-# Since environments are (append-only) mutated, this statement only creates and binds the environment, but it is still mostly empty.
-# TODO update the name of this environment
-# TODO define this in the 
+# Of course, the base environment we are defining is bound in the top-level so
+# that it can be accessed by later code at all. However, the base environment
+# must _not_ be a child of the top-level, because that would mean that any names
+# bound in it or its children would reserve top-level names—thus polluting the
+# namespace like we were trying to avoid.
 $__defineHere__ __anemone-bs:
   @__upd-name__: __name-intro__ (__sym-intro__ "value") (__sym-intro__ "__anemone-bs")
   __new-emptyEnv!__()
 
-# I'll need access to the top level and bootstrap environments to suck in the
-# bindings I need from top-level from within the local environment.
+# Make a Minimal Environment
+# ==========================
+
+# Since the freshly-made bootstrap environment is empty, there's not much we can
+# do in it. It would be better if it had the same bindings as the top-level, but
+# we don't need to insert those bindings from here (which would be tedious
+# without supporting definitions.
+
+# I'll need access to the top level to suck in the bindings I need from within.
 __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__top__"):
   @__upd-name__: __name-intro__ (__sym-intro__ "value") (__sym-intro__ "__top__")
   $($__lambda__ (env loc sexpr) env)
 
 # This will also require putting in __defineHere__ and __lookup__.
 # These two will also need __sym-intro__ so I can lift strings into symbols
-# (instead of a partial function to descontruct a symbol from an sexpr).
+# (__sexpr-elim__ would be partial function, so I've avoided it).
 __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__defineHere__") __defineHere__
 __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__lookup__") __lookup__
 __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__sym-intro__") __sym-intro__
 
-# I also need __sequence__ available because __anemone-bsquote uses it
+# I also need __sequence__ availablem because __anemone-bsquote uses it.
 __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__sequence__") __sequence__
 
+# Importing the Top-Level
+# -----------------------
+
+# Importing all the top-level bindings by hand would be tedious without defining
+# smoe helper functions. However, we don't necessarily want to export these
+# special-purpose helpers from the base environment. Therefore, we will create
+# out base environment from inside a child of the base environment. This
+# technique is the same pattern as making local definitions, so we will call
+# this child the "local environment".
 
 
-# The key to not polluting the top-level environment is to immediately begin evaluation inside a non-top-level environment.
-# I have chosen to evaluate in a new environment so that I can make local definitions while defining the bootstrap.
-# However, that new environment is also a child of the bootstrap, so definitions exproted to the bootstrap can be immediately used here.
-__eval__ (__new-env!__ __anemone-bs): $__anemone-bsquote:
-  
+# The rest of the file will be evaluated inside the local environment, so there's no reason to increase the indentation level.
+# This is where super-decorator syntax comes in handy.
+
+@__eval__ (__new-env!__ __anemone-bs)
+$__anemone-bsquote: # TODO make this a super-decorator and decrease indentation; I've only waited on this because I have a little debug code below that can disappear when haskell can run multiple files
+
   # The first thing to do is ensure we can define things in other environments, and espeically the bootstrap environment.
   # I'm also already tired of writing dunders, so let's fix that.
   $__defineHere__ def __defineHere__ # uses the `__defineHere__` that we inserted into the bootstrap env
@@ -69,22 +83,23 @@ __eval__ (__new-env!__ __anemone-bs): $__anemone-bsquote:
   $def fn: __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ "__lambda__")
   $def const: $fn (x _ign) x
   $def map!: $fn (f!): $__sequence__:
-    # the bang here is because we expect `f` to have side effects (technically it's expected impure)
-    # since we call `f`, the map function has to 
-    # a map that performs side effects is likely not interested in the actual mapped list, so we don't bother accumulating it
+    # The bang here is because we expect `f!` to have side effects (technically it's expected impure).
+    # A map that performs side effects is likely not interested in the actual mapped list, so we don't bother accumulating it.
+    # Since we call `f!`, the map function should be marked impure as well, which handily distinguishes it from the usual map function.
     $def loop!: $fn (xs₀): uncons xs₀:
       const ()
       $fn (x xs): $__sequence__:
         f! x
         loop! xs
 
-  # And now we need a primitive import procedure to import our primitives.
+  # We need a primitive import procedure to import our primitives.
   # All this does is move symbols from the top-level environment to the boostrap environment.
   $def _suck: $fn (str): $__sequence__:
     $def valNs: __sym-intro__ "value"
     $def sym: __sym-intro__ str
     defIn bsEnv valNs sym: __lookup__ __top__ valNs sym
-  # And now we finally have the machinery to import things _en-masse_, so let's do!
+
+  # And now we finally have the machinery to import things en-masse, so let's do!
   # Note that since __list__ isn't defined here yet, I don't yet have access to zexpr's square-bracket list syntax.
   map! _suck: $list
     # core features
@@ -112,21 +127,40 @@ __eval__ (__new-env!__ __anemone-bs): $__anemone-bsquote:
     "__new-env!__" "__new-emptyEnv!__"
     # skip "__lookup__"
     "__define__"
+    # control
+    "__raise__"
+    "__syntaxErr-intro__"
     # metadata
     "__name-intro__" "__name-elim__"
     "__upd-name__" "__upd-loc__"
 
-  # It is at this point that we have made a copy of the top-level environment in the bootstrap environment.
-  # The only difference is that this copy has a child that defines a few extra functions (and will define a few more later).
-  # The names of these helpers are reserved, and cannot be defined in the bootstrap environment (because that would craete shadowing).
-  # However, they can be bound in other children of the bootstrap.
-  # Our intention is for the bootstrap to be frozen after its creation, and the only way to extend the bootstrap environment will be to create new children of it.
-  # Therefore, we can use as many names as we want in this local environment without risking a name conflict in code that uses the bootstrap environment.
+  # It is at this point that we have made a copy of the top-level environment in
+  # the bootstrap environment. The only difference is that this copy has a child
+  # that defines a few extra helper functions (and will define a few more
+  # later). The names of these helpers are reserved, and cannot be defined in
+  # the base environment (because that would create shadowing). However, they
+  # _can_ be bound in other children of the base. Our intention is for the base
+  # environment to be "frozen" after its creation, and the only way to extend it
+  # will be to create new children. Therefore, we can use as many names as we
+  # want in the local environment without risking a name conflict in code that
+  # uses the bootstrap environment. If we want those names available in the base
+  # environment as well, we will have to define them there instead of in the
+  # local environment.
+
+  # TODO
+  # I think pattern-matching, especially against sexprs is really important
+  # so, probably quasiquote pattern is the first thing todo
+  # also, I'll then want to build quasiquote expressions
+  # I think the expressions being built after the patterns would shorten the code
 
 
-  # This is ehre for testing only
-  __lambda__
 
-# This is ehre for testing only
+
+  __lambda__ # DEBUG
+
+# DEBUG
 __eval__ __anemone-bs: $__anemone-bsquote:
   __define__ $($__lambda__ (env loc exprs) env) (__sym-intro__ "value") (__sym-intro__ "bar") 1
+
+# DEBUG
+__raise__: __syntaxErr-intro__ (__sexpr-intro__ 1) "test exception"

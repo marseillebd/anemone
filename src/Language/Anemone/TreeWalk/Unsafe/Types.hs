@@ -226,6 +226,8 @@ data PrimAp
   | PrimCaseQuat3 PrimCaseQuat (Loc, Value) (Loc, Value)
   | PrimCaseQuat2 PrimCaseQuat (Loc, Value) (Loc, Value) (Loc, Value)
   | PrimCaseQuat1 PrimCaseQuat (Loc, Value) (Loc, Value) (Loc, Value) (Loc, Value)
+  | PrimApplyOp2 PrimOp (Loc, Env)
+  | PrimApplyOp1 PrimOp (Loc, Env) (Loc, Loc)
   deriving (Show,Generic)
 instance NFData PrimAp
 
@@ -234,6 +236,7 @@ data PrimUnary
   | PrimSymIntro
   | PrimSymElim
   | PrimTypeOf
+  | PrimRaise
   | PrimNewEnv
   | PrimNewEmptyEnv
   | PrimNameIntro
@@ -245,6 +248,7 @@ data PrimBin
   | PrimAdd
   | PrimSub
   | PrimCons
+  | PrimSyntaxErrIntro
   | PrimUpdName
   | PrimUpdLoc
   | PrimNameIntro1
@@ -268,12 +272,10 @@ data PrimCaseQuat
 instance NFData PrimCaseQuat
 
 data PrimExn
-  = ScopeExn Env Name
-  | SyntaxExn Sexpr Text
+  = ScopeErr Env Name
+  | SyntaxErr Sexpr Text
   | UncallableExn Value
-  | UnexpectedOperative Callable
-  | UnexpectedApplicative Callable
-  | TypeError AType Value
+  | TypeErr AType Value
   deriving (Show,Generic)
 instance NFData PrimExn
 
@@ -305,7 +307,7 @@ data PushPop = Push | Pop
 -- these are marked by the block comment after a location
 -- FIXME I should just use named fields
 data StackItem :: PushPop -> Type where
-  Operate :: Loc -- the whole combination
+  Operate :: Sexpr -- the whole combination
           -> Loc {- operative -}
           -> Seq Sexpr
           -> StackItem either
