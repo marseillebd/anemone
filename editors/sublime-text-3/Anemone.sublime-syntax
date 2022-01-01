@@ -1,0 +1,272 @@
+%YAML 1.2
+---
+name: Anemone
+file_extentions: [anm]
+hidden_file_extentions: [anemone]
+first_line_match: '^#!/.*\banemone\b'
+scope: source.anemone
+version: 2
+
+variables:
+  subscripts: ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ₀₁₂₃₄₅₆₇₈₉₊₋
+  superscripts: ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻
+  greek: ΓΔΘΛΞΠΣΤΥΦΨΩαβγδεζηθικλμνξοπρσςτυφχψω
+  bbold: 𝔸𝔹ℂ𝔻𝔼𝔽𝔾ℍ𝕀𝕁𝕂𝕃𝕄ℕ𝕆ℙℚℝ𝕊𝕋𝕌𝕍𝕎𝕏𝕐ℤ𝕒𝕓𝕔𝕕𝕖𝕗𝕘𝕙𝕚𝕛𝕜𝕝𝕞𝕟𝕠𝕡𝕢𝕣𝕤𝕥𝕦𝕧𝕨𝕩𝕪𝕫𝟘𝟙𝟚𝟛𝟜𝟝𝟞𝟟𝟠𝟡
+  symChar: 'a-zA-Z~!%^&*\-_=+<>/?{{subscripts}}{{superscripts}}{{greek}}{{bbold}}'
+
+  hackQuoteIdent: '\\"(?:[^\\"]|\\.)*"'
+  ident: '(?:[{{symChar}}][{{symChar}}0-9]*|{{hackQuoteIdent}})'
+
+  startSym: '(?:[{{symChar}}]|\\")'
+  spaceChar: '(?:[ \t\n\r#]|\\[ \n\r]|)'
+
+contexts:
+  main:
+    - comment: Comments
+      match: '#.*$'
+      scope: comment.line.anemone
+
+    - include: numbers
+
+    - comment: Strings
+      match: '"'
+      scope: punctuation.definition.string.start
+      push:
+        - meta_scope: string.quoted.double.anemone
+        - include: dq_string
+
+    - include: name
+
+    - include: operators
+
+    - comment: Item Separator
+      match: ',\s'
+      scope: punctuation.separator.anemone
+
+    - include: brackets
+    - include: dots
+    - include: quotation
+    - include: decorators
+
+    - comment: Line Continue
+      match: '\\$'
+      scope: punctuation.separator.continuation.anemone
+
+    - comment: Stray Backslash
+      match: '\\(?! )'
+      scope: invalid # TODO a more specific scope?
+
+    - comment: Mixed Indentation
+      match: '^( +\t+|\t+ +)'
+      scope: invalid # TODO a more specific scope?
+
+    - comment: Trailing Whitespace
+      match: '[ \t]+$'
+      scope: invalid # TODO a more specific scope?
+
+  name:
+    - match: '{{ident}}(:)(?={{startSym}})'
+      scope: entity.name.namespace
+      captures:
+        1: keyword.operator.anemone
+    - match: '[A-Z][{{symChar}}0-9]*'
+      scope: constant.other.anemone
+    - match: '{{ident}}'
+      scope: variable.other.anemone
+    # TODO: these next two matches are a hack around why the branching match fails
+    - match: '{{hackQuoteIdent}}(:)(?={{startSym}})'
+      scope: entity.name.namespace
+      captures:
+        1: keyword.operator.anemone
+    - match: '{{hackQuoteIdent}}'
+      scope: variable.other.anemone
+    # TODO I don't know why the branching match below isn't working
+    - match: '(?=\\")'
+      branch_point: name_crumb
+      branch: [quotedIdentifier, quotedQualifier]
+  quotedQualifier:
+    - match: '\\"'
+      scope: punctuation.definition.string.start
+      push:
+        - meta_scope: entity.name.namespace
+        - match: '"(:)(?={{startSym}})'
+          scope: punctuation.definition.string.end
+          captures:
+            1: keyword.operator.anemone
+          pop: 2
+        - match: '"'
+          fail: name_crumb
+        - include: dq_string
+  quotedIdentifier:
+    - match: '\\"'
+      scope: punctuation.definition.string.start
+      push:
+        - meta_scope: variable.name.other
+        - match: '":(?={{startSym}})'
+          fail: name_crumb
+        - match: '"'
+          scope: punctuation.definition.string.end
+          pop: 2
+        - include: dq_string
+
+  operators:
+    - comment: Operate (with symbol)
+      match: '\$({{ident}}:)*{{ident}}'
+      scope: keyword.operator.anemone
+      captures:
+        1: entity.name.namespace.anemone
+    - comment: Operate (on expression)
+      match: '\$\('
+      scope: keyword.operator.anemone
+      push:
+        - match: \)
+          scope: keyword.operator.anemone
+          pop: true
+        - include: main
+    - comment: Operate
+      match: '\$'
+      scope: keyword.operator.anemone
+
+  brackets:
+    - comment: Round Brackets
+      match: \(
+      scope: punctuation.separator.anemone
+      push:
+        - match: \)
+          scope: punctuation.separator.anemone
+          pop: true
+        - include: main
+
+    - comment: Square Brackets
+      match: \[
+      scope: punctuation.separator.anemone
+      push:
+        - match: \]
+          scope: punctuation.separator.anemone
+          pop: true
+        - include: main
+
+    - comment: Curly Brackets
+      match: \{
+      scope: punctuation.separator.anemone
+      push:
+        - match: \}
+          scope: punctuation.separator.anemone
+          pop: true
+        - include: main
+
+    - comment: Bad Close Brackets
+      match: \)|\]|\}
+      scope: invalid.illegal.stray-bracket-end.anemone
+
+  dots:
+    - comment: Cons
+      match: '(?<={{spaceChar}})\.(?={{spaceChar}})'
+      scope: keyword.operator.anemone
+
+    - comment: Field Lens
+      match: (?<!{{spaceChar}})\.({{ident}})
+      captures:
+        1: variable.other.member.anemone
+      scope: punctuation.accessor.anemone
+    # TODO when the identifier is in a string
+
+    - comment: Overloaded Literals
+      match: '(?<!{{spaceChar}})\.(?!{{spaceChar}})' # TODO should lookahead for bracket, quote, and digit
+      scope: keyword.operator.anemone
+
+    - comment: Pair
+      match: '(?<={{spaceChar}})::(?={{spaceChar}})'
+      scope: keyword.operator.anemone
+
+    - comment: Right-Associate
+      match: '(?<!:):(?={{spaceChar}})'
+      scope: keyword.operator.anemone
+
+    - comment: Illegal Dot
+      match: '\.'
+      scope: invalid.illegal.stray-dot.anemone
+
+    - comment: Illegal Colon
+      match: ':'
+      scope: invalid.illegal.stray-colon.anemone
+
+  quotation:
+    - comment: Quote
+      match: ''''
+      scope: keyword.operator.anemone
+
+    - comment: Unquote and Unquote-Splicing
+      match: ',@?'
+      scope: keyword.operator.anemone
+
+    - comment: Quasiquote
+      match: '`'
+      scope: keyword.operator.anemone
+
+  decorators:
+    - comment: Super-Decorator
+      match: '^\s*@@'
+      scope: keyword.operator.anemone
+    - comment: Super-Decorator (line-internal)
+      match: '(?<=[:,.]\s|[\(\[\{])\s*@@'
+      scope: keyword.operator.anemone
+
+    - comment: Decorator
+      match: '^\s*@(?!@)'
+      scope: keyword.operator.anemone
+    - comment: Decorator (line-internal)
+      match: '(?<=[:,.]\s|[\(\[\{])\s*@(?!@)'
+      scope: keyword.operator.anemone
+
+    - comment: Illegal
+      match: '@'
+      scope: invalid.illegal.stray-at-sign.anemone
+
+  numbers:
+    # FIXME ensure underscores are correctly used, probly using variables to share common regex fragments
+    - comment: Hexadecimal
+      match: '[+-]?0[xX][0-9a-fA-F_]+'
+      scope: constant.numeric.anemone
+    - comment: Decimal
+      match: '[+-]?[0-9_]+(\.[0-9_])'
+      scope: constant.numeric.anemone
+
+  dq_string:
+    - comment: C Escapes
+      match: '\\[abefnrtv''"\\]'
+      scope: constant.character.escape.anemone
+    - comment: Control Escapes
+      match: '\\\^[?-_]'
+      scope: constant.character.escape.anemone
+    - comment: Byte Escapes
+      match: '\\[xX][0-9a-fA-F]{2}'
+      scope: constant.character.escape.anemone
+    - comment: Unicode Escapes
+      match: '\\[uU]\+[0-9a-fA-F]+;'
+      scope: constant.character.escape.anemone
+    - comment: HTML Escapes
+      match: '\\&#[0-9a-fA-F]+;'
+      scope: constant.character.escape.anemone
+    - comment: Line Continue
+      match: '\\\s*(#.*)?$'
+      scope: punctuation.separator.continuation.anemone
+      captures:
+        1: comment.line.anemone
+      push:
+        - match: '^\s*\\'
+          scope: punctuation.separator.continuation.anemone
+          pop: true
+        - match: '^\s*#.*$'
+          scope: comment.line.anemone
+        - match: '^\s*.*$'
+          scope: invalid.illegal.linebreak-in-string.anemone
+          pop: true
+    - comment: end of line
+      match: "$"
+      scope: invalid.illegal.end-of-line.anemone
+      pop: true
+    - comment: end of string
+      match: '"'
+      scope: punctuation.definition.string.end
+      pop: true
