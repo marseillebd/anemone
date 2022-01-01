@@ -155,7 +155,7 @@ apply k calledAt (CallPrim (PrimApplyOp1 op withEnv inLoc)) c = case c of
   (_, ListVal vs) | Just sexprs <- fromSexprList vs -> do
     let fullSexpr = SCombo LocUnknown sexprs
     operate fullSexpr (OperPrim op) (snd withEnv) (snd inLoc) sexprs
-  _ -> raise PrimCtrl k (calledAt, TypeErr Ty.primList (snd c)) -- TODO should be a list of sexprs, not just an any ist
+  _ -> raise PrimCtrl k (calledAt, TypeErr (Ty.primList Ty.primSexpr) (snd c))
 apply _ calledAt (CallPrim PrimEval) a = case a of
   (envLoc, EnvVal inEnv) -> val $ PrimAp (PrimEval1 (envLoc, inEnv))
   _ -> raisePrimArg 1 calledAt PrimEval (a:|[]) (TypeErr Ty.primEnv (snd a))
@@ -362,7 +362,7 @@ evalPrimBin PrimSub (_, IntVal a) (_, IntVal b) = Right $ IntVal (a - b)
 evalPrimBin PrimSub (_, IntVal _) (_, v) = Left (2, TypeErr Ty.primInt v)
 evalPrimBin PrimSub (_, v) _ = Left (1, TypeErr Ty.primInt v)
 evalPrimBin PrimCons (_, x) (_, ListVal xs) = Right $ ListVal (x :<| xs)
-evalPrimBin PrimCons _ (_, v) = Left (2, TypeErr Ty.primList v)
+evalPrimBin PrimCons _ (_, v) = Left (2, TypeErr (Ty.primList Ty.primAny) v)
 evalPrimBin PrimSyntaxErrIntro (_, SexprVal sexpr) (_, StrVal msg) =
   Right . PrimExn $ SyntaxErr sexpr msg
 evalPrimBin PrimSyntaxErrIntro (_, SexprVal _) (_, b) = Left (2, TypeErr Ty.primStr b)
@@ -402,13 +402,13 @@ evalPrimCaseBin calledAt PrimUncons (_, ListVal lst) onNull onCons = case lst of
   Empty -> applyImmediate calledAt onNull $ NilVal :| []
   x:<|xs -> applyImmediate calledAt onCons $ x :| [ListVal xs]
 evalPrimCaseBin calledAt PrimUncons v a b =
-  raisePrimArg 1 calledAt (PrimCaseBin PrimUncons) (v:|[a,b]) (TypeErr Ty.primList (snd v))
+  raisePrimArg 1 calledAt (PrimCaseBin PrimUncons) (v:|[a,b]) (TypeErr (Ty.primList Ty.primAny) (snd v))
 evalPrimCaseBin calledAt PrimNameElim (_, NameVal crumbs) onQualified onFinal = case crumbs of
   NameCrumb{namespace,name}:|crumbs' -> case crumbs' of
     (c:cs) -> applyImmediate calledAt onQualified $ SymVal namespace :| [SymVal name, NameVal (c:|cs)]
     [] -> applyImmediate calledAt onFinal $ SymVal namespace :| [SymVal name]
 evalPrimCaseBin calledAt PrimNameElim v a b =
-  raisePrimArg 1 calledAt (PrimCaseBin PrimNameElim) (v:|[a,b]) (TypeErr Ty.primList (snd v))
+  raisePrimArg 1 calledAt (PrimCaseBin PrimNameElim) (v:|[a,b]) (TypeErr Ty.primName (snd v))
 
 evalPrimCaseQuat :: Loc
                  -> PrimCaseQuat -> (Loc, Value)

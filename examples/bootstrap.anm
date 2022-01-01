@@ -1,6 +1,6 @@
 # What I'm trying to do here is set up a reasonable base environment without
 # polluting the top-level environment (i.e. global definitions bad!). I
-# interchangably call this environment the bootstrap environment, since it
+# interchangeably call this environment the bootstrap environment, since it
 # defines a lot of what might be considered the core of Anemone.
 
 # TODO does this actually abide by it?
@@ -48,14 +48,14 @@ __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__defineHere__")
 __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__lookup__") __lookup__
 __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__sym-intro__") __sym-intro__
 
-# I also need __sequence__ availablem because __anemone-bsquote uses it.
+# I also need `__sequence__` available because `__anemone-bsquote` uses it.
 __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__sequence__") __sequence__
 
 # Importing the Top-Level
 # -----------------------
 
 # Importing all the top-level bindings by hand would be tedious without defining
-# smoe helper functions. However, we don't necessarily want to export these
+# some helper functions. However, we don't necessarily want to export these
 # special-purpose helpers from the base environment. Therefore, we will create
 # out base environment from inside a child of the base environment. This
 # technique is the same pattern as making local definitions, so we will call
@@ -66,9 +66,9 @@ __define__ __anemone-bs (__sym-intro__ "value") (__sym-intro__ "__sequence__") _
 # This is where super-decorator syntax comes in handy.
 
 @__eval__ (__new-env!__ __anemone-bs)
-$__anemone-bsquote: # TODO make this a super-decorator and decrease indentation; I've only waited on this because I have a little debug code below that can disappear when haskell can run multiple files
+$__anemone-bsquote: # TODO make this a super-decorator and decrease indentation; I've only waited on this because I have a little debug code below that can disappear when Haskell can run multiple files
 
-  # The first thing to do is ensure we can define things in other environments, and espeically the bootstrap environment.
+  # The first thing to do is ensure we can define things in other environments, and especially the bootstrap environment.
   # I'm also already tired of writing dunders, so let's fix that.
   $__defineHere__ def __defineHere__ # uses the `__defineHere__` that we inserted into the bootstrap env
   $def defIn: __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ "__define__")
@@ -93,7 +93,7 @@ $__anemone-bsquote: # TODO make this a super-decorator and decrease indentation;
         loop! xs
 
   # We need a primitive import procedure to import our primitives.
-  # All this does is move symbols from the top-level environment to the boostrap environment.
+  # All this does is move symbols from the top-level environment to the bootstrap environment.
   $def _suck: $fn (str): $__sequence__:
     $def valNs: __sym-intro__ "value"
     $def sym: __sym-intro__ str
@@ -115,7 +115,7 @@ $__anemone-bsquote: # TODO make this a super-decorator and decrease indentation;
     "__add__" "__sub__"
     # lists
     "__list__" "__cons__" "__uncons__"
-    # sexprs
+    # s-exprs
     "__sexpr-intro__" "__sexpr-elim__"
     # skip "__sym-intro__"
     "__sym-elim__"
@@ -148,8 +148,8 @@ $__anemone-bsquote: # TODO make this a super-decorator and decrease indentation;
   # local environment.
 
   # TODO
-  # I think pattern-matching, especially against sexprs is really important
-  # so, probably quasiquote pattern is the first thing todo
+  # I think pattern-matching, especially against s-exprs is really important
+  # so, probably quasiquote pattern is the first thing to do
   # also, I'll then want to build quasiquote expressions
   # I think the expressions being built after the patterns would shorten the code
 

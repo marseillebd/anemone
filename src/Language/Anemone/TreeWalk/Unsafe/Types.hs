@@ -81,7 +81,6 @@ data Value
   | PrimExn !PrimExn
   | NameVal !Name
   | LocVal !Loc
-  -- TODO Thunk
   -- TODO ADTs/user-defined types, wrapped types (i.e. as close as I can get to Haskell newtype)
   -- TODO mutable cell and array types
   deriving (Show,Generic)
@@ -128,7 +127,10 @@ instance NFData AType
 
 data ATypeInfo
   = PrimType !PrimType
-  | UnionTy (Seq AType)
+  | ForallType !Callable -- TODO give names to the type variables
+  | ExistsType !Callable -- TODO give names to the type variables
+  | ListType !AType
+  | UnionType !(Seq AType)
   -- TODO quantified types, type variables
   -- TODO more structural types
   -- TODO | UserType -- TODO I need a lot more inf ohere (a unique id, callability, parameters/arguments, fields, &c)
@@ -137,6 +139,9 @@ instance NFData ATypeInfo
 
 data Tycon
   = PrimTycon !PrimType
+  | ForallTycon
+  | ExistsTycon
+  | ListTycon
   | UnionTycon
   -- TODO user-defined type constructors
   deriving (Eq,Show,Generic)
@@ -286,12 +291,11 @@ data PrimType
   | IntType
   | StrType
   | SymType
-  | ListType
   | SexprType
   | TypeType
   | TyconType
   | EnvType
-  | FunType
+  | FunType -- TODO make this have input and output type arguments
   | ThunkType
   | PromptType
   | NameType

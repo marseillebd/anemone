@@ -26,6 +26,7 @@ library
     Data.Zexpr.Zexpr
     Language.Anemone.Keywords
     Language.Anemone.TreeWalk.Environment
+    Language.Anemone.TreeWalk.Environment.Default
     Language.Anemone.TreeWalk.Eval
     Language.Anemone.TreeWalk.Machine
     Language.Anemone.TreeWalk.Stack

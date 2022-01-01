@@ -105,8 +105,8 @@ parseZexprs = MP.choice
 {-
 LineExpr
   ::= ChainExpr+
-   |  ChainExpr+ ':' Zexpr
-   |  ChainExpr+ ':' <indent> (<nextline> Zexpr)+ <dedent>
+   |  ChainExpr+ ':' <ws> Zexpr
+   |  ChainExpr+ ':' <ws> <indent> (<nextline> Zexpr)+ <dedent>
    |  ChainExpr+ <ws> '::' <ws> Zexpr
 -}
 parseLine :: Parser (NonEmpty Zexpr)
@@ -216,22 +216,6 @@ parseChain = do
             ZCombo (Zexpr.loc e0 <> sqLoc) MakeList (e0, sqLoc, es)
           _ -> errorWithoutStackTrace "internal error: got non-number when parsing dotted"
       ]
-
-    --     [ Right <$> plainSym
-    --     , Right <$> dqSym
-    --     , Left <$> parseNum
-    --     ]
-    -- pure $ case suffix of
-    --   Right f -> \e0 ->
-    --     let loc' = Zexpr.loc e0 <> loc
-    --      in ZCombo loc' LensField (e0, loc, f)
-    --   Left (ZAtom _ (Int n)) -> \e0 ->
-    --     let loc' = Zexpr.loc e0 <> loc
-    --      in ZCombo loc' MakeInt (e0, loc, n)
-    --   Left (ZCombo _ FloatLit repr) -> \e0 ->
-    --     let loc' = Zexpr.loc e0 <> loc
-    --      in ZCombo loc' MakeFloat (e0, loc, repr)
-    --   Left _ -> errorWithoutStackTrace "internal error: got non-number when parsing dotted"
 
 {-
 Sexpr
@@ -635,6 +619,7 @@ dqStr = do
           , MP.satisfy (\c -> '@' <= c && c <= '_') <&> \c -> T.singleton (chr $ ord c - ord '@')
           ]
         , do
+            _ <- MP.oneOf ("xX" :: String)
             h1 <- MP.satisfy isHexDigit
             h2 <- MP.satisfy isHexDigit
             let [(n,"")] = readHex [h1,h2]
@@ -655,14 +640,11 @@ dqStr = do
             _ <- MP.single ';'
             pure $ T.singleton (chr n)
         , do
-            _ <- MP.try $ MP.optional inlineSpace >> newline
-            _ <- MP.optional inlineSpace >> MP.single '\\'
+            _ <- MP.try $ MP.optional simpleSpace >> newline
+            -- FIXME blank lines (with optional comments) should be allowed here
+            _ <- MP.optional simpleSpace >> MP.single '\\'
             pure ""
         ]
-    , do
-        nl <- MP.try $ MP.optional inlineSpace >> newline
-        _ <- MP.optional inlineSpace >> MP.single '\\'
-        pure $ nl
     ]
   _ <- MP.single '\"'
   pure $ T.concat sections
