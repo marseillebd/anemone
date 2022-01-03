@@ -33,8 +33,8 @@ import Data.List.Reverse (RList,snoc)
 import Data.Symbol (Symbol)
 import Data.Text.Prettyprint.Doc (Doc,Pretty(..),(<+>))
 import Data.Zexpr.Location (Loc)
-import Language.Anemone.Keywords (valueNamespace,moduleNamespace)
-import Language.Anemone.TreeWalk.Type (AType(..))
+import Language.Anemone.Keywords (valueNamespace,typeNamespace,moduleNamespace)
+import Language.Anemone.TreeWalk.Type (AType(..),ATypeInfo(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (Callable(..),Closure(..),Laziness(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (PrimCaseUnary(..),PrimCaseBin(..),PrimCaseQuat(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (PrimExn(..),StackItem(..),PushPop(..))
@@ -91,7 +91,7 @@ instance Pretty Value where
   pretty (SymVal x) = PP.pretty $ Sexpr.renderSymbol x
   pretty (ListVal vs) = PP.encloseSep "[" "]" ", " (pretty <$> toList vs)
   pretty (SexprVal sexpr) = Sexpr.renderPretty sexpr
-  pretty (TypeVal AType{info}) = "<type " <> PP.viaShow info <> ">" -- TODO
+  pretty (TypeVal ty) = "<type " <> pretty ty <> ">"
   pretty (TyconVal tycon) = "<type constructor " <> PP.viaShow tycon <> ">" -- TODO
   pretty (EnvVal env) = "<" <> pretty env <> ">"
   pretty (PrimOp prim) = "<" <> PP.viaShow prim <> ">"
@@ -99,15 +99,21 @@ instance Pretty Value where
   pretty (ClosureVal Closure{name,definedAt}) = "<" <> nameInfo <+> "(" <> pretty definedAt <> ")>"
     where
     nameInfo = case name of
-      Just x -> "function" <+> renderName x
+      Just x -> "function" <+> renderName valueNamespace x
       Nothing -> "anonymous function"
   pretty (ThunkVal Thunk{suspendedAt}) = "<thunk (" <> pretty suspendedAt <> ")>" 
   pretty (PrimExn exn) = "<prompt" <+> PP.viaShow exn <> ">" -- TODO
-  pretty (NameVal name) = renderName name
+  pretty (NameVal name) = renderName valueNamespace name
   pretty (LocVal l) = "<location " <> pretty l <> ">"
 
-renderName :: Name -> Doc ann
-renderName crumbs =
+instance Pretty AType where
+  pretty AType{name=Just x} = renderName typeNamespace x
+  pretty AType{name=Nothing,info} = case info of
+    PrimType ty -> PP.viaShow ty
+    -- TODO the rest of these
+
+renderName :: Symbol -> Name -> Doc ann
+renderName defaultLastNs crumbs =
   let lead = (prettyCrumb <$> NE.init crumbs)
    in PP.encloseSep "" "" ":" $ lead <> [prettyLast (NE.last crumbs)]
   where
@@ -115,13 +121,13 @@ renderName crumbs =
     | namespace == moduleNamespace = prettySymbol name
     | otherwise = "(<namespace" <+> prettySymbol namespace <> ">" <+> prettySymbol name <>")"
   prettyLast NameCrumb{namespace,name}
-    | namespace == valueNamespace = prettySymbol name
+    | namespace == defaultLastNs = prettySymbol name
     | otherwise = "(<namespace" <+> prettySymbol namespace <> ">" <+> prettySymbol name <>")"
 
 instance Pretty Env where
   pretty Env{name,createdAt} =
     let nameInfo = case name of
-          Just x -> "environment" <+> renderName x <> ""
+          Just x -> "environment" <+> renderName valueNamespace x <> ""
           Nothing -> "anonymous environment"
         locInfo = case createdAt of
           Just loc -> (<+> "(" <> pretty loc <> ")")

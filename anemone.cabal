@@ -55,10 +55,12 @@ library
 executable anemone
   hs-source-dirs: app
   main-is: Main.hs
-  -- other-modules:
+  other-modules:
+    Options
   build-depends:
-    , base
     , anemone
+    , base
+    , optparse-applicative >=0.16
     , pretty-simple >=4.0
     , prettyprinter
     , symbol

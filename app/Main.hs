@@ -1,9 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 
 module Main (main) where
 
+import Control.Monad (forM)
 import Data.Functor ((<&>))
 import Data.Text.Prettyprint.Doc (Pretty(pretty))
 import Data.Text.Prettyprint.Doc.Render.Text (renderIO)
@@ -15,7 +17,8 @@ import Language.Anemone.TreeWalk.Environment (Env(..))
 import Language.Anemone.TreeWalk.Environment.Default (newDefaultEnv)
 import Language.Anemone.TreeWalk.Eval (eval)
 import Language.Anemone.TreeWalk.Stack (makeTrace)
-import System.Exit (exitFailure)
+import Options (Options(..),getOptions)
+import System.Exit (exitSuccess,exitFailure)
 import System.IO (Handle,stdout,stderr,hPutStr,hPutStrLn)
 import Text.Pretty.Simple (pPrint)
 
@@ -24,7 +27,25 @@ import qualified Data.Text.Prettyprint.Doc as PP
 
 
 main :: IO ()
-main = anemoneMain
+main = getOptions >>= \case
+  Version{numeric} -> error $ "TODO: version " ++ show numeric
+  Run{inputFilepaths,interactive} -> do
+    zexprs <- (concat <$>) $ forM inputFilepaths $ \inputFilepath -> do
+      inp <- T.readFile inputFilepath
+      case parse inputFilepath inp of
+        Left err -> do
+          hPutStr stderr $ errorBundlePretty err
+          exitFailure
+        Right zexprs -> pure zexprs
+    env0 <- newDefaultEnv <&> \e -> e{name=Nothing}
+    eval (toSexpr defaultConf <$> zexprs) env0 >>= \case
+      Right v -> hPutPrettyLn stdout v -- DEBUG
+      Left exn -> do
+        hPutPrettyLn stderr $ makeTrace exn
+        exitFailure
+    if interactive
+      then error "TODO: repl"
+      else exitSuccess
 
 anemoneMain :: IO ()
 anemoneMain = do

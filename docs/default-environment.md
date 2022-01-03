@@ -288,11 +288,13 @@ E.g. it may have a qualified name if accessed through an imported module, but a 
 
 The primitive types which support names are:
   * closures,
+  * types,
   * environments.
 
 The primitive types which support locations are:
   * s-expressions
   * closures,
+  * types,
   * environments.
 
 If a value does not support names or locations, calls to the corresponding update functions return the original value unmodified.

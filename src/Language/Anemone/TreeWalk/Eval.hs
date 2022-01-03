@@ -33,7 +33,7 @@ import Language.Anemone.TreeWalk.Machine (currentEnv,enterEnv,returnToEnv)
 import Language.Anemone.TreeWalk.Machine (Eval,runEval,val,ctrl)
 import Language.Anemone.TreeWalk.Machine (pop,push,remergePop)
 import Language.Anemone.TreeWalk.Stack (StackItem(..),PushPop(..),ReturnFrom(..))
-import Language.Anemone.TreeWalk.Type (typeOf,typeElim)
+import Language.Anemone.TreeWalk.Type (AType(..),typeOf,typeElim)
 import Language.Anemone.TreeWalk.Value (Control(..),capture,PrimExn(..),equal)
 import Language.Anemone.TreeWalk.Value (PrimCaseUnary(..),PrimCaseBin(..),PrimCaseQuat(..))
 import Language.Anemone.TreeWalk.Value (PrimOp(..),PrimAp(..))
@@ -150,7 +150,7 @@ apply k calledAt (OperPrim op) a = case a of
   _ -> raise PrimCtrl k (calledAt, TypeErr Ty.primEnv (snd a))
 apply k calledAt (CallPrim (PrimApplyOp2 op withEnv)) b = case b of
   (loc, LocVal atLoc) -> val $ PrimAp $ PrimApplyOp1 op withEnv (loc, atLoc)
-  _ -> raise PrimCtrl k (calledAt, TypeErr Ty.primType (snd b))
+  _ -> raise PrimCtrl k (calledAt, TypeErr Ty.primLoc (snd b))
 apply k calledAt (CallPrim (PrimApplyOp1 op withEnv inLoc)) c = case c of
   (_, ListVal vs) | Just sexprs <- fromSexprList vs -> do
     let fullSexpr = SCombo LocUnknown sexprs
@@ -332,7 +332,7 @@ evalPrimUnary PrimSexprIntro (_, StrVal s) = pure . Right . SexprVal $ SAtom Loc
 evalPrimUnary PrimSexprIntro (_, SymVal x) = pure . Right . SexprVal $ SAtom LocUnknown (Sym x)
 evalPrimUnary PrimSexprIntro (_, ListVal xs0)
   | Just sexprs <- fromSexprList xs0 = pure . Right . SexprVal $ SCombo LocUnknown sexprs
-evalPrimUnary PrimSexprIntro (_, v) = pure . Left $ TypeErr Ty.primSexprable v
+evalPrimUnary PrimSexprIntro (_, v) = pure . Left $ TypeErr Ty.primSexpry v
 evalPrimUnary PrimSymIntro (_, StrVal s) = pure . Right $ SymVal (intern $ T.unpack s)
 evalPrimUnary PrimSymIntro (_, v) = pure . Left $ TypeErr Ty.primStr v
 evalPrimUnary PrimSymElim (_, SymVal x) = pure . Right $ StrVal (T.pack $ unintern x)
@@ -351,7 +351,7 @@ evalPrimUnary PrimNameIntro (_, ListVal lst)
   fromNameList (NameVal n :<| Empty) = Just (n :| [])
   fromNameList (NameVal n :<| rest) = (n `NE.cons`) <$> fromNameList rest
   fromNameList _ = Nothing
-evalPrimUnary PrimNameIntro (_, v) = pure . Left $ TypeErr Ty.primNameIntroable v
+evalPrimUnary PrimNameIntro (_, v) = pure . Left $ TypeErr Ty.primNamey v
 
 evalPrimBin :: PrimBin -> (Loc, Value) -> (Loc, Value) -> Either (Int, PrimExn) Value
 evalPrimBin PrimEqual (_, a) (_, b) = Right $ BoolVal (a `equal` b)
@@ -369,6 +369,7 @@ evalPrimBin PrimSyntaxErrIntro (_, SexprVal _) (_, b) = Left (2, TypeErr Ty.prim
 evalPrimBin PrimSyntaxErrIntro (_, a) _ = Left (1, TypeErr Ty.primSexpr a)
 evalPrimBin PrimUpdName (_, NameVal x) (_, v) = case v of
   ClosureVal f -> Right $ ClosureVal f{name = Just x}
+  TypeVal e -> Right $ TypeVal e{name = Just x}
   EnvVal e -> Right $ EnvVal e{name = Just x}
   _ -> Right v
 evalPrimBin PrimUpdName (_, v) _ = Left (1, TypeErr Ty.primName v)
@@ -376,6 +377,7 @@ evalPrimBin PrimUpdLoc (_, LocVal loc) (_, v) = case v of
   SexprVal (SAtom _ atom) -> Right $ SexprVal (SAtom loc atom)
   SexprVal (SCombo _ sexprs) -> Right $ SexprVal (SCombo loc sexprs)
   ClosureVal f -> Right $ ClosureVal f{definedAt = loc}
+  TypeVal e -> Right $ TypeVal e{definedAt = loc}
   EnvVal e -> Right $ EnvVal e{createdAt = Just loc}
   _ -> Right v
 evalPrimBin PrimUpdLoc (_, v) _ = Left (1, TypeErr Ty.primLoc v)

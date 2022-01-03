@@ -81,7 +81,9 @@ $__anemone-bsquote: # TODO make this a super-decorator and decrease indentation;
   # A handful of classic helpers drawn from functional programming wouldn't go awry.
   # And by helpers, I guess I mean we also need λ itself.
   $def fn: __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ "__lambda__")
+  $def identity: $fn (x) x
   $def const: $fn (x _ign) x
+  $def const-lazy: $fn ((~ x) _ign) (__force__ x)
   $def map!: $fn (f!): $__sequence__:
     # The bang here is because we expect `f!` to have side effects (technically it's expected impure).
     # A map that performs side effects is likely not interested in the actual mapped list, so we don't bother accumulating it.
@@ -147,20 +149,75 @@ $__anemone-bsquote: # TODO make this a super-decorator and decrease indentation;
   # environment as well, we will have to define them there instead of in the
   # local environment.
 
+####################################
+
   # TODO
   # I think pattern-matching, especially against s-exprs is really important
   # so, probably quasiquote pattern is the first thing to do
   # also, I'll then want to build quasiquote expressions
   # I think the expressions being built after the patterns would shorten the code
 
+####################################
+
+  # TODO I'm going to try out some pattern stuff
+  # however, I should probably define a Pattern type
+
+  $def patNs: __sym-intro__ "pattern"
+
+  # In what comes next, I'll be frequently disassembling lists of s-exprs.
+  # This serves as a crude list pattern match.
+  $def fromNtup: $fn (n₀ tup₀ ok₀ (~ no)): $__sequence__:
+    $def loop: $fn (n tup ok):
+      $__cond__:
+        {n __equal__ 0} :: __uncons__ tup:
+          const ok
+          $fn (x xs): __force__ no
+        __true__ :: __uncons__ tup:
+          const-lazy: __force__ no
+          $fn (x xs): loop {n __sub__ 1} xs (ok x)
+    loop n₀ tup₀ ok₀
+  $def fromSymbol: $fn (sexpr ok (~ no)): __sexpr-elim__ sexpr:
+    const-lazy: __force__ no
+    const-lazy: __force__ no
+    ok
+    const-lazy: __force__ no
+
+  $def defPattern: $fn (env loc sexprs): fromNtup 2 sexprs:
+    $fn (x? body): fromSymbol x?:
+      $fn (x): __define__ env patNs x (__eval__ env body)
+      __raise__: __syntaxErr-intro__ x? "expected symbol"
+    __raise__: __syntaxErr-intro__ sexprs "`($defPattern ,symbol ,body)"
 
 
+  $defPattern __variable__: $fn (var):
+    $fn (v env ok no): $__sequence__:
+      __define__ env valNs var v
 
-  __lambda__ # DEBUG
+  $defPattern __equal__: $fn (expected):
+    $fn (given env ok no): $__cond__:
+      __equal__ expected given :: ok
+      __true__ :: no
+
+  $defPattern Nil: $fn (v env ok no): __uncons__ v:
+    const ok
+    $fn (x xs): no
+  $defPattern Cons: $fn (v env ok no): __uncons__ v:
+    const: no
+    $fn (x xs): ok x xs
+
+  $def compilePat: $fn (env loc sexprs): fromNtup 1 sexprs:
+    $fn (sexpr): __sexpr-elim__ sexpr:
+      __equal__
+      __equal__
+      $fn (x): __lookup__ env patNs x
+      const-lazy: __raise__ TODO
+    __raise__: __syntaxErr-intro__ sexprs "`($compilePat ,pattern)"
+
+  # ($fn (y z w (~ x)) x) 1 2 3 asdf
+  # fromNtup 2 [1, 2] ($fn (a b) "a") asdf
+  $def foo: $compilePat Nil
+  foo [1] $($fn (env loc exprs) env) "hello" "uh-oh"
 
 # DEBUG
-__eval__ __anemone-bs: $__anemone-bsquote:
-  __define__ $($__lambda__ (env loc exprs) env) (__sym-intro__ "value") (__sym-intro__ "bar") 1
-
-# DEBUG
-__raise__: __syntaxErr-intro__ (__sexpr-intro__ 1) "test exception"
+# __eval__ __anemone-bs: $__anemone-bsquote:
+#   __define__ $($__lambda__ (env loc exprs) env) (__sym-intro__ "value") (__sym-intro__ "bar") 1

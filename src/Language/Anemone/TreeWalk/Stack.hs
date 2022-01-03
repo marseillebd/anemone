@@ -22,6 +22,7 @@ module Language.Anemone.TreeWalk.Stack
 
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text.Prettyprint.Doc (Pretty(..),(<+>))
+import Language.Anemone.Keywords (valueNamespace)
 import Language.Anemone.TreeWalk.Unsafe.Types (StackItem(..),PushPop(..),ReturnFrom(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (StackTrace(..),TraceItem(..))
 import Language.Anemone.TreeWalk.Value (Closure(..),Control(..),renderName)
@@ -132,7 +133,7 @@ instance Pretty StackTrace where
     goExn = PP.nest 2 . PP.vsep $ ["unhandled control raised from" <+> pretty loc, renderExn exn]
     goItem CallTrace{callee=Closure{name,definedAt},calledAt} =
       let nameInfo = case name of
-            Just x -> "function " <> renderName x
+            Just x -> "function " <> renderName valueNamespace x
             Nothing -> "anonymous function"
           defLocInfo =  "(" <> pretty definedAt <> ")"
           callSiteInfo = "called at" <+> pretty calledAt
@@ -148,11 +149,11 @@ instance Pretty StackTrace where
       "in argument" <+> pretty argNum <+> "of primitive" <+> PP.viaShow primFunc <+> "called at" <+> pretty calledAt
 
 renderExn :: PrimExn -> PP.Doc ann
-renderExn (ScopeErr env name) = "Scope Error:" <+> renderName name <+> "in" <+> "<" <> pretty env <> ">"
+renderExn (ScopeErr env name) = "Scope Error:" <+> renderName valueNamespace name <+> "in" <+> "<" <> pretty env <> ">"
 renderExn (SyntaxErr sexpr msg) = PP.nest 2 . PP.vsep $ ["Syntax Error:" <+> pretty msg, Sexpr.renderPretty sexpr]
 renderExn (UncallableExn v) = "Uncallable: cannot call value" <+> pretty v
-renderExn (TypeErr expected value) = PP.group . PP.nest 2 $ PP.vsep
+renderExn (TypeErr expected value) = PP.nest 2 $ PP.vsep
   [ "Type Error:"
-  , "expecting:" <+> PP.viaShow expected
+  , "expecting:" <+> pretty expected
   , "got value:" <+> pretty value
   ]

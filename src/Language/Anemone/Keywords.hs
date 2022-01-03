@@ -3,6 +3,7 @@ module Language.Anemone.Keywords
   , quote
   -- * built-in namespaces
   , valueNamespace
+  , typeNamespace
   , moduleNamespace
   ) where
 
@@ -16,6 +17,9 @@ quote = intern "__quote__"
 
 valueNamespace :: Symbol
 valueNamespace = intern "value"
+
+typeNamespace :: Symbol
+typeNamespace = intern "type"
 
 moduleNamespace :: Symbol
 moduleNamespace = intern "module"

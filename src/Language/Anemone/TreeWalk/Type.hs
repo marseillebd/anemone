@@ -23,8 +23,8 @@ module Language.Anemone.TreeWalk.Type
   , primPrompt
   , primName
   , primLoc
-  , primSexprable
-  , primNameIntroable
+  , primSexpry
+  , primNamey
   , primAny
   ) where
 
@@ -33,11 +33,11 @@ import Data.Sequence (Seq(..))
 import Data.Symbol (intern)
 import Data.Zexpr.Location (Loc(..))
 import Data.Zexpr.Sexpr (Sexpr(..),Atom(..))
-import Language.Anemone.Keywords (valueNamespace)
+import Language.Anemone.Keywords (typeNamespace)
 import Language.Anemone.TreeWalk.Environment (Env,newEmptyEnv)
 import Language.Anemone.TreeWalk.Unsafe.Types (AType(..),ATypeInfo(..),Tycon(..),PrimType(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (NameCrumb(..))
-import Language.Anemone.TreeWalk.Unsafe.Types (Value(..),Callable(..),Closure(..),Laziness(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (Value(..),Closure(..),Laziness(..))
 import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Data.Sequence as Seq
@@ -66,80 +66,85 @@ typeElim :: AType -> (Tycon, Seq Value)
 typeElim AType{info} = go info
   where
   go (PrimType a) = (PrimTycon a, Empty)
-  go (ForallType f) = (ForallTycon, Seq.singleton (fromCallable f))
-  go (ExistsType f) = (ExistsTycon, Seq.singleton (fromCallable f))
+  go (ForallType f) = (ForallTycon, Seq.singleton (ClosureVal f))
+  go (ExistsType f) = (ExistsTycon, Seq.singleton (ClosureVal f))
   go (ListType t) = (UnionTycon, Seq.singleton (TypeVal t))
   go (UnionType tys) = (UnionTycon, Seq.singleton (ListVal $ TypeVal <$> tys))
-  fromCallable (OperPrim f) = PrimOp f
-  fromCallable (CallPrim f) = PrimAp f
-  fromCallable (CallClosure f) = ClosureVal f
 
 primNil :: AType
-primNil = AType { info = PrimType NilType }
+primNil = _atype "Nil" $ PrimType NilType
 
 primBool :: AType
-primBool = AType { info = PrimType BoolType }
+primBool = _atype "Bool" $ PrimType BoolType
 
 primInt :: AType
-primInt = AType { info = PrimType IntType }
+primInt = _atype "Integer" $ PrimType IntType
 
 primStr :: AType
-primStr = AType { info = PrimType StrType }
+primStr = _atype "String" $ PrimType StrType
 
 primSym :: AType
-primSym = AType { info = PrimType SymType }
+primSym = _atype "Symbol" $ PrimType SymType
 
 primList :: AType -> AType
-primList t = AType { info = ListType t }
+primList t = _atype "List" $ ListType t
 
 primSexpr :: AType
-primSexpr = AType { info = PrimType SexprType }
+primSexpr = _atype "Sexpr" $ PrimType SexprType
 
 primType :: AType
-primType = AType { info = PrimType TypeType }
+primType = _atype "Type" $ PrimType TypeType
 
 primTycon :: AType
-primTycon = AType { info = PrimType TyconType }
+primTycon = _atype "TypeCtor" $ PrimType TyconType
 
 primEnv :: AType
-primEnv = AType { info = PrimType EnvType }
+primEnv = _atype "Env" $ PrimType EnvType
 
 primFun :: AType
-primFun = AType { info = PrimType FunType }
+primFun = _atype "Function" $ PrimType FunType
 
 primThunk :: AType
-primThunk = AType { info = PrimType ThunkType }
+primThunk = _atype "Thunk" $ PrimType ThunkType
 
 primPrompt :: AType
-primPrompt = AType { info = PrimType PromptType }
+primPrompt = _atype "Prompt" $ PrimType PromptType
 
 primName :: AType
-primName = AType { info = PrimType NameType }
+primName = _atype "Name" $ PrimType NameType
 
 primLoc :: AType
-primLoc = AType { info = PrimType LocType }
+primLoc = _atype "Loc" $ PrimType LocType
 
-primSexprable :: AType
-primSexprable = AType{ info = UnionType (Seq.fromList [primInt, primStr, primSym, primList primSexpr]) }
+primSexpry :: AType
+primSexpry = _atype "Sexpry" $ UnionType (Seq.fromList [primInt, primStr, primSym, primList primSexpr])
 
-primNameIntroable :: AType
-primNameIntroable = AType { info = UnionType (Seq.fromList [primSym, primList primName]) }
+primNamey :: AType
+primNamey = _atype "Namey" $ UnionType (Seq.fromList [primSym, primList primName])
 
 primAny :: AType
-primAny = AType { info = ExistsType identity }
-  where
-  identity :: Callable
-  identity = CallClosure $ Closure
-    { name = Just $ NameCrumb valueNamespace (intern "identity") :| []
-    , definedAt = LocUnknown
-    , scope = unsafeEmptyEnv
-    , args = RList.nil
-    , params = (Strict, x):|[]
-    , body = SAtom LocUnknown (Sym x)
-    }
-  x = intern "x"
+primAny = _atype "Any" $ ExistsType identityType
 
+identityType :: Closure
+identityType = Closure
+  { name = Just $ NameCrumb typeNamespace (intern "Identity") :| []
+  , definedAt = LocUnknown
+  , scope = unsafeEmptyEnv
+  , args = RList.nil
+  , params = (Strict, t):|[]
+  , body = SAtom LocUnknown (Sym t)
+  }
+  where
+  t = intern "t"
 
 unsafeEmptyEnv :: Env
 {-# NOINLINE unsafeEmptyEnv #-}
 unsafeEmptyEnv = unsafePerformIO $ newEmptyEnv
+
+
+_atype :: String -> ATypeInfo -> AType
+_atype str info = AType
+  { info
+  , name = Just $ NameCrumb typeNamespace (intern str) :| []
+  , definedAt = LocUnknown
+  }

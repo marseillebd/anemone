@@ -119,20 +119,21 @@ instance NFData Laziness
 
 data AType = AType
   { info :: !ATypeInfo -- this determines the identity of a type
-  -- , name :: !Name -- FIXME I should define an FQName type around lists of symbols
-  -- , definedAt :: !Loc -- TODO
+  , name :: !(Maybe Name) -- which is really the name for the type constructor; tycon arguments are printed separately
+  , definedAt :: !Loc
   }
   deriving (Show,Generic)
 instance NFData AType
 
 data ATypeInfo
   = PrimType !PrimType
-  | ForallType !Callable -- TODO give names to the type variables
-  | ExistsType !Callable -- TODO give names to the type variables
+  | ForallType !Closure
+  | ExistsType !Closure
+  -- TODO type variables
   | ListType !AType
-  | UnionType !(Seq AType)
-  -- TODO quantified types, type variables
   -- TODO more structural types
+  | UnionType !(Seq AType)
+  -- TODO intersection type
   -- TODO | UserType -- TODO I need a lot more inf ohere (a unique id, callability, parameters/arguments, fields, &c)
   deriving (Show,Generic)
 instance NFData ATypeInfo
