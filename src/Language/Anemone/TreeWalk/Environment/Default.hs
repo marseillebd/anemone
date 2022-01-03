@@ -52,7 +52,7 @@ newDefaultEnv = do
     -- types
     , ("__typeof__", PrimAp $ PrimUnary PrimTypeOf)
     , ("__type-elim__", PrimAp $ PrimCaseUnary PrimTypeElim)
-    , ("__tycon-nil__", TypeVal Type.primNil)
+    , ("__tycon-unit__", TypeVal Type.primUnit)
     , ("__tycon-int__", TypeVal Type.primInt)
     -- environments
     , ("__new-env!__", PrimAp $ PrimUnary PrimNewEnv)

@@ -124,7 +124,7 @@ $__anemone-bsquote: # TODO make this a super-decorator and decrease indentation;
     # types
     "__typeof__"
     "__type-elim__"
-    "__tycon-nil__" "__tycon-int__"
+    "__tycon-unit__" "__tycon-int__"
     # environments
     "__new-env!__" "__new-emptyEnv!__"
     # skip "__lookup__"

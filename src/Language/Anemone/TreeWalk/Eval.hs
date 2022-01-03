@@ -51,7 +51,7 @@ import qualified Language.Anemone.TreeWalk.Type as Ty
 
 eval :: [Sexpr] -> Env -> IO (Either Control Value)
 eval stmts env = runEval env $ case stmts of
-  [] -> val NilVal
+  [] -> val UnitVal
   [expr] -> elaborate expr >>= loop
   (s0:s:ss) -> do
     push $ Sequence (Sexpr.loc s0) (s:|ss)
@@ -68,7 +68,7 @@ elaborate = \case
   SAtom loc (Sym x) -> do
     env0 <- currentEnv
     lookup loc env0 Keyword.valueNamespace x
-  SCombo _ Empty -> val NilVal
+  SCombo _ Empty -> val UnitVal
   combo@(SCombo invokedAt (SAtom _ (Sym operate_m) :<| args0))
     | operate_m == Keyword.operate -> case args0 of
       op :<| args -> do
@@ -125,7 +125,7 @@ reduce k (Right v) = case k of
   Cond pLoc c arcs -> case v of
     BoolVal True -> elaborate c
     BoolVal False -> case arcs of
-      Empty -> val NilVal
+      Empty -> val UnitVal
       (p',c'):<|arcs' -> do
         push $ Cond (Sexpr.loc p') c' arcs'
         elaborate p'
@@ -269,7 +269,7 @@ operate fullSexpr (OperPrim PrimLambda) env loc sexprs = case sexprs of
       | laziness == intern "~" = Right (Lazy, x)
     go1 nonParam = Left (Sexpr.loc nonParam, SyntaxErr nonParam "expecting parameter")
 operate _ (OperPrim PrimSequence) _ _ sexprs = case sexprs of
-  Empty -> val NilVal
+  Empty -> val UnitVal
   stmt:<|Empty -> elaborate stmt
   stmt:<|s:<|ss -> do
     push $ Sequence (Sexpr.loc stmt) (s:|toList ss)
@@ -291,7 +291,7 @@ operate _ (OperPrim PrimCond) _ _ sexprs = case toArc `mapM` sexprs of
   Right ((p,c):<|arcs) -> do
     push $ Cond (Sexpr.loc p) c arcs
     elaborate p
-  Right Empty -> val NilVal
+  Right Empty -> val UnitVal
   Left nonArc -> ctrl $ PrimCtrl R.nil (Sexpr.loc nonArc, SyntaxErr nonArc "expecting predicate-consequent pair")
   where
   toArc (SCombo _ (p :<| c :<| Empty)) = Right (p, c)
@@ -340,7 +340,7 @@ evalPrimUnary PrimSymElim (_, v) = pure . Left $ TypeErr Ty.primSym v
 evalPrimUnary PrimTypeOf (_, v) = pure . Right $ TypeVal (typeOf v)
 evalPrimUnary PrimNewEnv (_, EnvVal parent) = Right . EnvVal <$> Env.newChild parent
 evalPrimUnary PrimNewEnv (_, v) = pure . Left $ TypeErr Ty.primEnv v
-evalPrimUnary PrimNewEmptyEnv (_, NilVal) = Right . EnvVal <$> Env.newEmptyEnv
+evalPrimUnary PrimNewEmptyEnv (_, UnitVal) = Right . EnvVal <$> Env.newEmptyEnv
 evalPrimUnary PrimNewEmptyEnv (_, v) = pure . Left $ TypeErr Ty.primEnv v
 evalPrimUnary PrimRaise (_, PrimExn exn) = pure . Left $ exn
 evalPrimUnary PrimRaise (_, v) = pure . Left $ TypeErr Ty.primPrompt v
@@ -401,7 +401,7 @@ evalPrimCaseBin :: Loc
                 -> (Loc, Value) -> (Loc, Value)
                 -> Eval (Either Control Value)
 evalPrimCaseBin calledAt PrimUncons (_, ListVal lst) onNull onCons = case lst of
-  Empty -> applyImmediate calledAt onNull $ NilVal :| []
+  Empty -> applyImmediate calledAt onNull $ UnitVal :| []
   x:<|xs -> applyImmediate calledAt onCons $ x :| [ListVal xs]
 evalPrimCaseBin calledAt PrimUncons v a b =
   raisePrimArg 1 calledAt (PrimCaseBin PrimUncons) (v:|[a,b]) (TypeErr (Ty.primList Ty.primAny) (snd v))

@@ -90,7 +90,7 @@ If alternate semantics are desired (e.g. do not save the result, lock the thunk 
 ### `($__sequence__ ,@sexpr:stmt)`
 
 Evaluate each statement in-order and reduces to the result of the last.
-If there are no statements, then just reduces to nil.
+If there are no statements, then just reduces to unit.
 
 ### `($__defineHere__ ,symbol:ident ,sexpr:body)`
 
@@ -123,15 +123,15 @@ arc ::= (,sexpr:predicate ,sexpr:consequent)
 Each arc is visited in-order:
   * The `predicate` expression is evaluated to a boolean value
   * If that predicate is true, then the result of the expression is the evaluation of the `consequent`
-If none of the arcs' `predicate`s are true, then the result is the nil value.
-Note that a `__cond__` with zero arcs is allowed, and will always evaluate to nil.
+If none of the arcs' `predicate`s are true, then the result is the unit value.
+Note that a `__cond__` with zero arcs is allowed, and will always evaluate to unit.
 
 ### `(__equal__ a b)`
 
 Returns `__true__` if `a` and `b` are equal, `__false__` otherwise.
 
 This function only provides access to equality for a few built-in types:
-  * nil
+  * unit
   * booleans
   * integers
   * strings
@@ -230,7 +230,7 @@ The return value is the return value of `k`.
 
 ### TODO type constructor values
 
-`__tycon-nil__` `__tycon-int__`
+`__tycon-unit__` `__tycon-int__`
 
 ## Environments
 

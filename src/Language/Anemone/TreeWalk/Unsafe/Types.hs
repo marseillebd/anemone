@@ -61,7 +61,7 @@ import GHC.Generics (Generic)
 ------------------------------------ Simple Values ------------------------------------
 
 data Value
-  = NilVal
+  = UnitVal
   | BoolVal !Bool
   | IntVal !Integer
   -- TODO other low-level numerical types
@@ -287,7 +287,7 @@ instance NFData PrimExn
 
 -- NOTE These have no type parameters, because they also serve as their own type constructors
 data PrimType
-  = NilType
+  = UnitType
   | BoolType
   | IntType
   | StrType

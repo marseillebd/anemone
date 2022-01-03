@@ -64,7 +64,7 @@ data Control
   deriving(Show)
 
 equal :: Value -> Value -> Bool
-equal NilVal = \case { NilVal -> True ; _ -> False }
+equal UnitVal = \case { UnitVal -> True ; _ -> False }
 equal (BoolVal a) = \case { BoolVal b -> a == b ; _ -> False }
 equal (IntVal a) = \case { IntVal b -> a == b ; _ -> False }
 equal (StrVal a) = \case { StrVal b -> a == b ; _ -> False }
@@ -83,7 +83,7 @@ equal (NameVal a) = \case { NameVal b -> a == b ; _ -> False }
 equal (LocVal a) = \case { LocVal b -> a == b ; _ -> False }
 
 instance Pretty Value where
-  pretty NilVal = "()"
+  pretty UnitVal = "()"
   pretty (BoolVal True) = "true"
   pretty (BoolVal False) = "false"
   pretty (IntVal n) = PP.viaShow n

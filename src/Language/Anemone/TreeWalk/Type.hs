@@ -8,7 +8,7 @@ module Language.Anemone.TreeWalk.Type
   , typeOf
   , typeElim
   -- * type representations of primitives
-  , primNil
+  , primUnit
   , primBool
   , primInt
   , primStr
@@ -44,7 +44,7 @@ import qualified Data.Sequence as Seq
 import qualified Data.List.Reverse as RList
 
 typeOf :: Value -> AType
-typeOf NilVal = primNil
+typeOf UnitVal = primUnit
 typeOf (BoolVal _) = primBool
 typeOf (IntVal _) = primInt
 typeOf (StrVal _) = primStr
@@ -71,8 +71,8 @@ typeElim AType{info} = go info
   go (ListType t) = (UnionTycon, Seq.singleton (TypeVal t))
   go (UnionType tys) = (UnionTycon, Seq.singleton (ListVal $ TypeVal <$> tys))
 
-primNil :: AType
-primNil = _atype "Nil" $ PrimType NilType
+primUnit :: AType
+primUnit = _atype "Unit" $ PrimType UnitType
 
 primBool :: AType
 primBool = _atype "Bool" $ PrimType BoolType
