@@ -1,0 +1,160 @@
+# What I'm trying to do here is set up a reasonable base environment without
+# polluting the top-level environment (i.e. global definitions bad!). For this,
+# we'll need two environments: one that users will evaluate code within, and one
+# that sets that environment up. The former I call the "base" environment, and
+# the latter the "bootstrap".
+
+# The values I _do_ define in the top-level environment are all prefixed with
+# `__anemone_`, which abides by the conventions for vendor-specific naming. I'm
+# okay with using the word `anemone`, since I'm the first (and so far only)
+# implementation of it. Perhaps someday I'll change the prefix to
+# `vanilla-anemone`; that'd be the dream!
+
+
+
+# Of course, the base environment we are defining is bound in the top-level so
+# that it can be accessed by later code at all. However, the base environment
+# must _not_ be a child of the top-level, because that would mean that any names
+# bound in it or its children would reserve top-level names—thus polluting the
+# namespace like we were trying to avoid.
+$__defineHere__ __anemone_base:
+  @__upd-name__: __name-intro__ (__sym-intro__ "value") (__sym-intro__ "__anemone_base")
+  __new-emptyEnv!__()
+
+# The bootstrap environment also should not be a child of the top environment,
+# or even the base environment. The bootstrap environment will need many
+# temporary definitions in order to set up the base, but we don't want to
+# erserve those names in the base. All that to say: the base environment shuold
+# _also_ be unpolluted.
+$__defineHere__ __anemone_bootstrap:
+  @__upd-name__: __name-intro__ (__sym-intro__ "value") (__sym-intro__ "__anemone_bootstrap")
+  __new-emptyEnv!__()
+
+
+
+# Make a Minimal Environment
+# ==========================
+
+# Since the freshly-made bootstrap environment is empty, there's not much we can
+# do in it. It would be better if it had the same bindings as the top-level, but
+# we don't need to insert all those bindings from here (which would be tedious
+# without some supporting definitions).
+
+
+# I'll need access to the top level to suck in the bindings I need from within.
+__define__ __anemone_bootstrap (__sym-intro__ "value") (__sym-intro__ "__top__"):
+  @__upd-name__: __name-intro__ (__sym-intro__ "value") (__sym-intro__ "__top__")
+  $($__lambda__ (env loc sexpr) env)
+
+# This will also require putting in __defineHere__ and __lookup__.
+# These two will also need __sym-intro__ so I can lift strings into symbols
+# (__sexpr-elim__ would be partial function, so I've avoided it).
+__define__ __anemone_bootstrap (__sym-intro__ "value") (__sym-intro__ "__defineHere__") __defineHere__
+__define__ __anemone_bootstrap (__sym-intro__ "value") (__sym-intro__ "__lookup__") __lookup__
+__define__ __anemone_bootstrap (__sym-intro__ "value") (__sym-intro__ "__sym-intro__") __sym-intro__
+
+# I also need `__sequence__` available: we don't even have `__lambda__`
+# available in the bootstrap environment yet.
+__define__ __anemone_bootstrap (__sym-intro__ "value") (__sym-intro__ "__sequence__") __sequence__
+
+
+# To evaluate expressions in the bootstrap envirnoment, we'll also need to pass expressions to `__eval__`.
+# However, we don't have "core" syntax like `__quote__` available yet.
+# This operative quotes all passed expressions and combine them into a sequence block.
+# It's just
+#     $def (__anemone_bsquote _ _ code) `($__sequence__ ,@code)
+# but I don't have quasiquote available yet.
+$__defineHere__ __anemone_bsquote: $__lambda__ (env loc code): __sexpr-intro__:
+  # Notice how decorator syntax can smush down excessive indentation.
+  @__cons__ (__sexpr-intro__: __sym-intro__ "__operate__")
+  @__cons__ (__sexpr-intro__: __sym-intro__ "__sequence__")
+  code
+
+
+# Importing the Top-Level
+# -----------------------
+
+# Importing all the top-level bindings by hand would be tedious without defining
+# some helper functions. However, we don't necessarily want to export these
+# special-purpose helpers from the base environment. Therefore, we will create
+# out base environment from inside a child of the base environment. This
+# technique is the same pattern as making local definitions, so we will call
+# this child the "local environment".
+
+# The rest of the file will be evaluated inside the local environment, so there's no reason to increase the indentation level.
+# This is where super-decorator syntax comes in handy.
+@__eval__ __anemone_bootstrap
+$__anemone_bsquote:
+
+  # The first thing to do is ensure we can define things in other environments, and especially the bootstrap environment.
+  # I'm also already tired of writing dunders, so let's fix that.
+  $__defineHere__ __define__: __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ "__define__")
+  $__defineHere__ __anemone_bootstrap: __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ "__anemone_bootstrap")
+
+  # We'll also quickly want to construct and deconstruct lists, so let's pull that in as well.
+  $__defineHere__ __list__: __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ "__list__")
+  $__defineHere__ __uncons__: __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ "__uncons__")
+
+  # A couple of classic helpers drawn from functional programming wouldn't go awry.
+  # And by helpers, I guess I mean we also need λ itself.
+  $__defineHere__ __lambda__: __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ "__lambda__")
+  $__defineHere__ _map!: $__lambda__ (f!): $__sequence__:
+    # The bang here is because we expect `f!` to have side effects (technically it's expected impure).
+    # A map that performs side effects is likely not interested in the actual mapped list, so we don't bother accumulating it.
+    # Since we call `f!`, the map function should be marked impure as well, which handily distinguishes it from the usual map function.
+    $__defineHere__ loop!: $__lambda__ (xs₀): __uncons__ xs₀:
+      $__lambda__ (_ign): ()
+      $__lambda__ (x xs): $__sequence__:
+        f! x
+        loop! xs
+
+  # We need a primitive import procedure to import our primitives.
+  # All this does is move symbols from the top-level environment to the bootstrap environment.
+  $__defineHere__ _bsImport: $__lambda__ (str):
+    __define__ __anemone_bootstrap (__sym-intro__ "value") (__sym-intro__ str):
+      __lookup__ __top__ (__sym-intro__ "value") (__sym-intro__ str)
+
+  # And now we finally have the machinery to import things en-masse, so let's do!
+  # Note that since __list__ isn't defined here yet, I don't yet have access to zexpr's square-bracket list syntax.
+  _map! _bsImport: $__list__
+    # core features
+    # SKIP "__lambda__" # already defined by __anemone_bootstrap
+    "__eval__" "__force__"
+    # sequential programming
+    # SKIP "__sequence__" # already defined from __top__
+    # SKIP "__defineHere__" # already defined from __top__
+    # booleans
+    "__true__" "__false__"
+    "__cond__"
+    "__equal__"
+    # arithmetic
+    "__add__" "__sub__"
+    # lists
+    # SKIP "__list__"  # already defined by __anemone_bootstrap
+    "__cons__"
+    # SKIP "__uncons__" # already defined by __anemone_bootstrap
+    # s-exprs
+    "__sexpr-intro__" "__sexpr-elim__"
+    # SKIP "__sym-intro__" # already defined from __top__
+    "__sym-elim__"
+    # types
+    "__typeof__"
+    "__type-elim__"
+    "__tycon-unit__" "__tycon-int__"
+    # environments
+    "__new-env!__" "__new-emptyEnv!__"
+    # SKIP "__lookup__" # already defined from __top__
+    # SKIP "__define__" # already defined by __anemone_bootstrap
+    # control
+    "__raise__"
+    "__syntaxErr-intro__"
+    # metadata
+    "__name-intro__" "__name-elim__"
+    "__upd-name__" "__upd-loc__"
+
+  # It is at this point that we have made a copy of the top-level environment in
+  # the bootstrap environment. The only difference is that this copy defines a few extra helper functions (and will define many more
+  # later).
+  # However, the base environment is still empty; it can remain so until we are done building the bootstrap environment.
+
+  # The story continues in `bootstrap.anm`.

@@ -150,6 +150,7 @@ instance Pretty StackTrace where
 
 renderExn :: PrimExn -> PP.Doc ann
 renderExn (ScopeErr env name) = "Scope Error:" <+> renderName valueNamespace name <+> "in" <+> "<" <> pretty env <> ">"
+renderExn (ShadowErr env name) = "Shadowing Error:" <+> renderName valueNamespace name <+> "in" <+> "<" <> pretty env <> ">"
 renderExn (SyntaxErr sexpr msg) = PP.nest 2 . PP.vsep $ ["Syntax Error:" <+> pretty msg, Sexpr.renderPretty sexpr]
 renderExn (UncallableExn v) = "Uncallable: cannot call value" <+> pretty v
 renderExn (TypeErr expected value) = PP.nest 2 $ PP.vsep

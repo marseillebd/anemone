@@ -1,0 +1,63 @@
+@__eval__ __anemone_bootstrap
+$__anemone_bsquote:
+
+  # We're going to be defining lots of syntax before we get to define soem sort
+  # of `def-syntax`. This function mitigates the pain of `uncons`ing a
+  # fixed-length list of sexprs, while reporting accurate syntax errors.
+  $__defineHere__ _unSyntax: $__lambda__ (sexprs₀ partMsgs₀ extraMsg (~ ok₀)): $__sequence__:
+    $__defineHere__ go: $__lambda__ (sexprs partMsgs (~ ok)):
+      __uncons__ partMsgs:
+        $__lambda__ (_ign): __uncons__ sexprs:
+          # at end of both input sexprs and expected parts
+          $__lambda__ (_ign): __force__ ok
+          # extra sexprs after expected parts
+          $__lambda__ (extra rest): __raise__: __syntaxErr-intro__ extra extraMsg
+        $__lambda__ (partMsg otherPartMsgs): __uncons__ sexprs:
+          # expecting a part, but it was not present
+          $__lambda__ (_ign): __raise__: __syntaxErr-intro__ (__sexpr-intro__ sexprs₀) partMsg
+          # found another part: feed it to the continuation, then recurse
+          $__lambda__ (sexpr otherSexprs): go(otherSexprs, otherPartMsgs, __force__ ok sexpr)
+    go sexprs₀ partMsgs₀ ok₀
+
+
+  # The first thing to do, I think, is to create a primitive define that manages
+  # namespaces and metadata well. The former will help with populating the
+  # "vast" number of namespaces we will have. The latter will help to debug this
+  # bootstrap code as I develop it.
+
+  $__defineHere__ _define: $__lambda__ (env loc sexprs): _unSyntax sexprs:
+    $__list__:
+      "expecting namespace"
+      "expecting identifier"
+      "expecting body"
+    "unexpected expression after body"
+    $__lambda__ (ns? ident? body): $__sequence__:
+      $__defineHere__ _expectNsSym: $__lambda__ (_ign):
+        __raise__: __syntaxErr-intro__ ns? "expecting symbol (as namespace)"
+      $__defineHere__ _expectIdentSym: $__lambda__ (_ign):
+        __raise__: __syntaxErr-intro__ ident? "expecting symbol (as identifier)"
+      __sexpr-elim__ ns?:
+        _expectNsSym
+        _expectNsSym
+        $__lambda__ (ns): __sexpr-elim__ ident?:
+          _expectIdentSym
+          _expectIdentSym
+          $__lambda__ (ident):
+            __define__ env ns ident:
+              @__upd-loc__ loc
+              @__upd-name__ (__name-intro__ ns ident)
+              __eval__ env body
+          _expectIdentSym
+        _expectNsSym
+  # And you know what?, let's attach the appropriate metadata to `define` itself.
+  $_define value define _define
+
+
+  # TODO define a new prompt
+
+
+  # if define is called with an sexpr after the body that is the `where` symbol, the remaining sexprs are let-bound before the body
+  # $def x:
+  #   expr
+  #   where
+  #   more declarations

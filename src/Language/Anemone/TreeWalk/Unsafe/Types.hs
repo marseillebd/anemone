@@ -279,6 +279,7 @@ instance NFData PrimCaseQuat
 
 data PrimExn
   = ScopeErr Env Name
+  | ShadowErr Env Name
   | SyntaxErr Sexpr Text
   | UncallableExn Value
   | TypeErr AType Value

@@ -1,0 +1,8 @@
+Anemone
+    filter remove_matches ^\s*#
+    filter remove_inline #.*$
+    extension anm
+    extension anemone
+    script_exe anemone
+    3rd_gen_scale 1.37
+    end_of_line_continuation \\\s*$

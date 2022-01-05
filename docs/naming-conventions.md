@@ -30,11 +30,14 @@ Sub-/superscript names are tricker as Unicode (at time of writing) does not incl
 
 
 Names beginning with double-underscores are reserved: in general, the Anemone spec may choose to begin using such a name for core functionality at any time, and such names may also change without a change in version number.
-However, there are subspaces of this naming pattern that reserved specifically for vendor- and implementation-specific uses.
 These names are also subject to change without corresponding change in version number (i.e. the are not part of the interface), _unless_ they
 also end in double-underscore ("dunder" names for short).
 Dunder names can be expected to remain stable.
 Identifiers bound in non-top-level environments are outside the scope of Anemone's reservations, but are automatically reserved for the module author.
+
+A subspace of reserved identifiers are reserved for vendor- or implementation-specific uses.
+These start with `__<name>_`, where `name` does not contain underscores, and mentions the name of an individual, organization, or standards body.
+
 Identifiers that begin with a single underscore are "recommended private", and generalyl should not be used except in special circumstances (i.e. they are provided for library authors who "know what they're doing" to work around the restrictions of the usual api).
 Avoid name mangling, prefer to hide private bindings in local scopes (e.g. let blocks, or do not export from a module).
 If access to private names is needed for testing, export those environments with an underscore-prefixed name.

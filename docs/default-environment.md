@@ -11,14 +11,15 @@ This way, a single pure-Anemone standard library implementation can be re-used a
 
 Anemone implementation may provide additional primitives in the top-level beyond those listed in this document.
 To avoid name clashes, it is recommended that implementations:
-  * only add bindings in the `value` namespace, or a vendor- and/or implementation-specific namespace
-  * names added in the `value` namespace should be prefixed with double underscores (`__<name>`)
+  * only add bindings in the `value` and `module` namespaces, or a vendor- and/or implementation-specific namespace
+  * names added in the `value` or `module` namespaces should be prefixed with double underscores (`__<name>`)
   * A vendor-specific namespace should take the form `__vendor-<name>`, where `name` may be a recognizable name of
     1) an organization or individual (who invents a new general-purpose primitive),
     2) a standards body or standards track (which attempts to unify competing primitive semantics).
   * An implementation-specific namespace should take the form `__builtin-<impl>`, where `impl` may be
   * A namespace both vendor and implementation-specific should take the form `__vendor-<name>-<impl>`
-A vendor-specific namespace may be the name of a standards body (as competing , an organization or individual, or an implementation
+A vendor-specific namespace may be the name of a standards body (as competing , an organization or individual, or an implementation.
+
 
 It is recommended that Anemone users wishing to access vendor- or implementation-specific functionality do so through a library module(-tree) (which therefore should be provided by the vendor) preferably placed under the `Vendor` or `Builtin` modules (i.e. environments bound in the default environment's `module` namespace with those names).
 If there is no chance of confusion, such modules may also be placed in the default environment, but note the wide array of potentially confusing name choices:

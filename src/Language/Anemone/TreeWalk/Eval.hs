@@ -130,15 +130,17 @@ reduce k (Right v) = case k of
         push $ Cond (Sexpr.loc p') c' arcs'
         elaborate p'
     _ -> ctrl $ PrimCtrl (R.singleton $ Stack.toPush k) (pLoc, TypeErr Ty.primBool v)
-  OpDefineHere inEnv _ x _ ->
+  OpDefineHere inEnv loc x _ ->
     Env.define inEnv Keyword.valueNamespace x v >>= \case
       True -> val v
-      False -> error $ "unimplemented: redefinition (or shadowing) error " ++ show x -- TODO
+      False ->
+        let name = NameCrumb{namespace=Keyword.valueNamespace,name=x} :| []
+         in ctrl $ PrimCtrl (R.singleton $ Stack.toPush k) (loc, ShadowErr inEnv name)
   OpList vs _ Empty -> val $ ListVal (vs :|> v)
   OpList vs _ (e:<|es) -> do
     push $ OpList (vs :|> v) (Sexpr.loc e) es
     elaborate e
-  PrimArg _ _ _ _ -> error "internal error: popped `PrimArg` continuation while reducing"
+  PrimArg _ _ _ _ -> errorWithoutStackTrace "internal error: popped `PrimArg` continuation while reducing"
 reduce k1 (Left exn) = do
   k <- remergePop k1
   -- TODO catch exceptions
@@ -183,10 +185,12 @@ apply _ calledAt (CallPrim (PrimDefine3 inEnv)) b = case b of
 apply _ calledAt (CallPrim (PrimDefine2 inEnv ns)) c = case c of
   (xLoc, SymVal x) -> val $ PrimAp (PrimDefine1 inEnv ns (xLoc, x))
   _ -> raisePrimArg 3 calledAt PrimDefine (second EnvVal inEnv:|[second SymVal ns,c]) (TypeErr Ty.primSym (snd c))
-apply _ _ (CallPrim (PrimDefine1 (_, inEnv) (_, ns) (_, x))) (_, v) =
+apply _ calledAt (CallPrim (PrimDefine1 (_, inEnv) (_, ns) (_, x))) (_, v) =
   Env.define inEnv ns x v >>= \case
     True -> val v
-    False -> error $ "unimplemented: redefinition (or shadowing) error " ++ show x -- TODO
+    False ->
+      let name = NameCrumb{namespace=ns,name=x} :| []
+       in ctrl $ PrimCtrl R.nil (calledAt, ShadowErr inEnv name)
 apply _ forcedAt (CallPrim PrimForce) (_, v) = case v of
   ThunkVal thunk@Thunk{cell} -> liftIO (readIORef cell) >>= \case
     Left (thunkeeEnv, thunkee) -> do
