@@ -4,6 +4,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 
+-- FIXME use the one from https://github.com/Zankoku-Okuno/extra-lists
 module Data.List.Reverse
   ( RList
   -- * Introduction and Elimination

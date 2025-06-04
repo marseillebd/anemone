@@ -49,6 +49,11 @@ newDefaultEnv = do
     , ("__sexpr-elim__", PrimAp $ PrimCaseQuat PrimSexprElim)
     , ("__sym-intro__", PrimAp $ PrimUnary PrimSymIntro)
     , ("__sym-elim__", PrimAp $ PrimUnary PrimSymElim)
+    -- first-class control
+    , ("__raise__", PrimAp PrimRaise) -- TODO though a primitive raise likely also needs a continuation for re-raising/continuing a raise
+    , ("__new-prompt!__", PrimAp $ PrimUnary PrimNewPrompt)
+    , ("__control-intro__", PrimAp $ PrimBin PrimCtrlIntro)
+    , ("__syntaxErr-intro__", PrimAp $ PrimBin PrimSyntaxErrIntro)
     -- types
     , ("__typeof__", PrimAp $ PrimUnary PrimTypeOf)
     , ("__type-elim__", PrimAp $ PrimCaseUnary PrimTypeElim)
@@ -59,9 +64,6 @@ newDefaultEnv = do
     , ("__new-emptyEnv!__", PrimAp $ PrimUnary PrimNewEmptyEnv)
     , ("__lookup__", PrimAp PrimLookup)
     , ("__define__", PrimAp PrimDefine)
-    -- first-class control
-    , ("__raise__", PrimAp $ PrimUnary PrimRaise) -- TODO though a primitive raise likely also needs a continuation for re-raising/continuing a raise
-    , ("__syntaxErr-intro__", PrimAp $ PrimBin PrimSyntaxErrIntro)
     -- metadata
     , ("__name-intro__", PrimAp $ PrimUnary PrimNameIntro)
     , ("__name-elim__", PrimAp $ PrimCaseBin PrimNameElim)

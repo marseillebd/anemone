@@ -13,6 +13,9 @@ module Language.Anemone.TreeWalk.Unsafe.Types
   , Callable(..)
   , Closure(..)
   , Laziness(..)
+  -- * Throwables
+  , Throwable(..)
+  , Prompt(..)
   -- * Runtime System
   , Sexpr(..)
   , Atom(..)
@@ -54,6 +57,7 @@ import Data.List.Reverse (RList)
 import Data.Sequence (Seq)
 import Data.Symbol (Symbol)
 import Data.Text (Text)
+import Data.Word (Word64)
 import Data.Zexpr.Location (Loc)
 import Data.Zexpr.Sexpr (Sexpr(..),Atom(..))
 import GHC.Generics (Generic)
@@ -78,7 +82,8 @@ data Value
   | PrimAp !PrimAp
   | ClosureVal !Closure
   | ThunkVal !Thunk
-  | PrimExn !PrimExn
+  | PromptVal !Prompt
+  | ThrowVal !Throwable
   | NameVal !Name
   | LocVal !Loc
   -- TODO ADTs/user-defined types, wrapped types (i.e. as close as I can get to Haskell newtype)
@@ -109,6 +114,22 @@ instance NFData Closure
 data Laziness = Strict | Lazy
   deriving(Show,Generic)
 instance NFData Laziness
+
+------------------------------------ Throwables ------------------------------------
+
+data Prompt = Prompt
+  { promptId :: !Word64
+  , name :: !(Maybe Name)
+  }
+  deriving(Show,Generic)
+instance NFData Prompt
+
+data Throwable
+  = PrimThrow PrimExn
+  | UserThrow Prompt (Seq Value)
+  deriving(Show,Generic)
+instance NFData Throwable
+
 
 ------------------------------------ Abstract Data Types ------------------------------------
 
@@ -219,6 +240,7 @@ data PrimAp
   | PrimLookup2 (Loc, Env)
   | PrimLookup1 (Loc, Env) (Loc, Symbol)
   | PrimForce
+  | PrimRaise
   | PrimUnary PrimUnary
   | PrimBin PrimBin
   | PrimBin1 PrimBin (Loc, Value)
@@ -242,7 +264,7 @@ data PrimUnary
   | PrimSymIntro
   | PrimSymElim
   | PrimTypeOf
-  | PrimRaise
+  | PrimNewPrompt
   | PrimNewEnv
   | PrimNewEmptyEnv
   | PrimNameIntro
@@ -254,6 +276,7 @@ data PrimBin
   | PrimAdd
   | PrimSub
   | PrimCons
+  | PrimCtrlIntro
   | PrimSyntaxErrIntro
   | PrimUpdName
   | PrimUpdLoc
@@ -300,6 +323,7 @@ data PrimType
   | FunType -- TODO make this have input and output type arguments
   | ThunkType
   | PromptType
+  | ThrowType
   | NameType
   | LocType
   deriving (Eq,Show,Generic)
@@ -387,7 +411,7 @@ data ReturnFrom
     }
   deriving (Show)
 
-data StackTrace = StackTrace (RList TraceItem) (Loc, PrimExn)
+data StackTrace = StackTrace (RList TraceItem) (Loc, Throwable)
   deriving (Show)
 data TraceItem
   = CallTrace

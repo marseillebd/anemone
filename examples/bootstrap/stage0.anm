@@ -146,15 +146,16 @@ $__anemone_bsquote:
     # SKIP "__lookup__" # already defined from __top__
     # SKIP "__define__" # already defined by __anemone_bootstrap
     # control
-    "__raise__"
+    "__raise__" "__new-prompt!__" "__control-intro__"
     "__syntaxErr-intro__"
     # metadata
     "__name-intro__" "__name-elim__"
     "__upd-name__" "__upd-loc__"
 
   # It is at this point that we have made a copy of the top-level environment in
-  # the bootstrap environment. The only difference is that this copy defines a few extra helper functions (and will define many more
-  # later).
-  # However, the base environment is still empty; it can remain so until we are done building the bootstrap environment.
+  # the bootstrap environment. The only difference is that this copy defines a
+  # few extra helper functions (and will define many more later). However, the
+  # base environment is still empty; it can remain so until we are done building
+  # the bootstrap environment.
 
   # The story continues in `bootstrap.anm`.

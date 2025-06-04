@@ -52,8 +52,9 @@ $__anemone_bsquote:
   # And you know what?, let's attach the appropriate metadata to `define` itself.
   $_define value define _define
 
+  $_define value MatchFail: __new-prompt!__ ()
 
-  # TODO define a new prompt
+  __raise__: __control-intro__ MatchFail [] # DEBUG
 
 
   # if define is called with an sexpr after the body that is the `where` symbol, the remaining sexprs are let-bound before the body

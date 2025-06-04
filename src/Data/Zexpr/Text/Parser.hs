@@ -603,7 +603,8 @@ dqStr = do
     , do
       _ <- MP.single '\\'
       MP.choice
-        [ MP.single 'a' >> pure "\a"
+        [ MP.single '0' >> pure "\0"
+        , MP.single 'a' >> pure "\a"
         , MP.single 'b' >> pure "\b"
         , MP.single 'e' >> pure "\ESC"
         , MP.single 'f' >> pure "\f"
@@ -611,6 +612,7 @@ dqStr = do
         , MP.single 'r' >> pure "\r"
         , MP.single 't' >> pure "\t"
         , MP.single 'v' >> pure "\v"
+        , MP.single '+' >> pure " "
         , MP.single '\'' >> pure "\'"
         , MP.single '\"' >> pure "\""
         , MP.single '\\' >> pure "\\"

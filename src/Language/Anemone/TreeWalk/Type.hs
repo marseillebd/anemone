@@ -21,6 +21,7 @@ module Language.Anemone.TreeWalk.Type
   , primFun
   , primThunk
   , primPrompt
+  , primThrow
   , primName
   , primLoc
   , primSexpry
@@ -58,7 +59,8 @@ typeOf (PrimOp _) = primFun
 typeOf (PrimAp _) = primFun
 typeOf (ClosureVal _) = primFun
 typeOf (ThunkVal _) = primThunk
-typeOf (PrimExn _) = primPrompt
+typeOf (PromptVal _) = primPrompt
+typeOf (ThrowVal _) = primThrow
 typeOf (NameVal _) = primName
 typeOf (LocVal _) = primLoc
 
@@ -109,6 +111,9 @@ primThunk = _atype "Thunk" $ PrimType ThunkType
 
 primPrompt :: AType
 primPrompt = _atype "Prompt" $ PrimType PromptType
+
+primThrow :: AType
+primThrow = _atype "Throwable" $ PrimType ThrowType
 
 primName :: AType
 primName = _atype "Name" $ PrimType NameType

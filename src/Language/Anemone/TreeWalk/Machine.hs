@@ -21,6 +21,7 @@ module Language.Anemone.TreeWalk.Machine
   , currentEnv
   , enterEnv
   , returnToEnv
+  , newPromptId
   , newTypeId
   ) where
 
@@ -49,10 +50,12 @@ execEval :: Env -> Eval a -> IO (a, Machine)
 execEval env action = runStateT (unEval action) =<< m0
   where
   m0 = do
+    promptIdSupply <- newMVar 1
     typeIdSupply <- newMVar 1
     pure M
       { stack=Stack.empty
       , env
+      , promptIdSupply
       , typeIdSupply
       }
 
@@ -61,6 +64,7 @@ data Machine = M
   { stack :: !Stack
   , env :: !Env
   , typeIdSupply :: !(MVar Word64)
+  , promptIdSupply :: !(MVar Word64)
   }
 
 val :: Value -> Eval (Either Control Value)
@@ -121,6 +125,11 @@ enterEnv trace env' = do
 returnToEnv :: Env -> Eval ()
 returnToEnv env0 = Eval $ do
   modify' $ \st ->st{env=env0}
+
+newPromptId :: Eval Word64
+newPromptId = Eval $ do
+  supply <- gets promptIdSupply
+  liftIO . modifyMVar supply $ \n -> pure (n + 1, n)
 
 newTypeId :: Eval Word64
 newTypeId = Eval $ do

@@ -22,6 +22,8 @@ module Language.Anemone.TreeWalk.Value
   , Thunk(..)
   , Control(..)
   , capture
+  , Throwable(..)
+  , Prompt(..)
   , PrimExn(..)
   , equal
   , renderName
@@ -37,7 +39,7 @@ import Language.Anemone.Keywords (valueNamespace,typeNamespace,moduleNamespace)
 import Language.Anemone.TreeWalk.Type (AType(..),ATypeInfo(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (Callable(..),Closure(..),Laziness(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (PrimCaseUnary(..),PrimCaseBin(..),PrimCaseQuat(..))
-import Language.Anemone.TreeWalk.Unsafe.Types (PrimExn(..),StackItem(..),PushPop(..))
+import Language.Anemone.TreeWalk.Unsafe.Types (Throwable(..),Prompt(..),PrimExn(..),StackItem(..),PushPop(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (PrimOp(..),PrimAp(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (PrimUnary(..),PrimBin(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (Thunk(..),Env(..),Name,NameCrumb(..))
@@ -56,11 +58,9 @@ toCallable (ClosureVal f@Closure{params=(laziness,_):|_}) =
 toCallable _ = Nothing
 
 capture :: Control -> StackItem 'Push -> Control
-capture (PrimCtrl ks exn) k = PrimCtrl (ks `snoc` k) exn
+capture (Control ks exn) k = Control (ks `snoc` k) exn
 
-data Control
-  = PrimCtrl (RList (StackItem 'Push)) (Loc, PrimExn)
-  -- TODO user-defiend control
+data Control = Control (RList (StackItem 'Push)) (Loc, Throwable)
   deriving(Show)
 
 equal :: Value -> Value -> Bool
@@ -78,7 +78,8 @@ equal (PrimOp _) = const False -- TODO?
 equal (PrimAp _) = const False -- TODO?
 equal (ClosureVal _) = const False -- TODO?
 equal (ThunkVal _) = const False -- TODO?
-equal (PrimExn _) = const False -- TODO?
+equal (PromptVal Prompt{promptId=a}) = \case { PromptVal Prompt{promptId=b} -> a == b; _ -> False }
+equal (ThrowVal _) = const False -- TODO?
 equal (NameVal a) = \case { NameVal b -> a == b ; _ -> False }
 equal (LocVal a) = \case { LocVal b -> a == b ; _ -> False }
 
@@ -102,7 +103,8 @@ instance Pretty Value where
       Just x -> "function" <+> renderName valueNamespace x
       Nothing -> "anonymous function"
   pretty (ThunkVal Thunk{suspendedAt}) = "<thunk (" <> pretty suspendedAt <> ")>" 
-  pretty (PrimExn exn) = "<prompt" <+> PP.viaShow exn <> ">" -- TODO
+  pretty (PromptVal prompt) = "<prompt" <+> PP.viaShow prompt <> ">" -- TODO
+  pretty (ThrowVal exn) = "<exception" <+> PP.viaShow exn <> ">" -- TODO
   pretty (NameVal name) = renderName valueNamespace name
   pretty (LocVal l) = "<location " <> pretty l <> ">"
 

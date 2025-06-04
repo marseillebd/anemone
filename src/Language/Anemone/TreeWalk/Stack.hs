@@ -26,7 +26,7 @@ import Language.Anemone.Keywords (valueNamespace)
 import Language.Anemone.TreeWalk.Unsafe.Types (StackItem(..),PushPop(..),ReturnFrom(..))
 import Language.Anemone.TreeWalk.Unsafe.Types (StackTrace(..),TraceItem(..))
 import Language.Anemone.TreeWalk.Value (Closure(..),Control(..),renderName)
-import Language.Anemone.TreeWalk.Value (PrimExn(..))
+import Language.Anemone.TreeWalk.Value (Throwable(..),PrimExn(..))
 
 import qualified Data.List.Reverse as RList
 import qualified Data.Text.Prettyprint.Doc as PP
@@ -94,7 +94,7 @@ toPush (OpList vs itemLoc sexprs) = OpList vs itemLoc sexprs
 toPush (PrimArg n calledAt f args) = PrimArg n calledAt f args
 
 makeTrace :: Control -> StackTrace
-makeTrace (PrimCtrl stack exn) = StackTrace (RList.catMaybes $ go <$> stack) exn
+makeTrace (Control stack exn) = StackTrace (RList.catMaybes $ go <$> stack) exn
   where
   go (Operate _ _ _) = Nothing
   go (Args _ _ _) = Nothing
@@ -130,7 +130,7 @@ makeTrace (PrimCtrl stack exn) = StackTrace (RList.catMaybes $ go <$> stack) exn
 instance Pretty StackTrace where
   pretty (StackTrace stack (loc, exn)) = PP.vsep $ RList.reverse (goItem <$> stack) ++ [goExn]
     where
-    goExn = PP.nest 2 . PP.vsep $ ["unhandled control raised from" <+> pretty loc, renderExn exn]
+    goExn = PP.nest 2 . PP.vsep $ ["unhandled control raised from" <+> pretty loc, renderThrowable exn]
     goItem CallTrace{callee=Closure{name,definedAt},calledAt} =
       let nameInfo = case name of
             Just x -> "function " <> renderName valueNamespace x
@@ -148,13 +148,15 @@ instance Pretty StackTrace where
     goItem PrimArgTrace{argNum,calledAt,primFunc} =
       "in argument" <+> pretty argNum <+> "of primitive" <+> PP.viaShow primFunc <+> "called at" <+> pretty calledAt
 
-renderExn :: PrimExn -> PP.Doc ann
-renderExn (ScopeErr env name) = "Scope Error:" <+> renderName valueNamespace name <+> "in" <+> "<" <> pretty env <> ">"
-renderExn (ShadowErr env name) = "Shadowing Error:" <+> renderName valueNamespace name <+> "in" <+> "<" <> pretty env <> ">"
-renderExn (SyntaxErr sexpr msg) = PP.nest 2 . PP.vsep $ ["Syntax Error:" <+> pretty msg, Sexpr.renderPretty sexpr]
-renderExn (UncallableExn v) = "Uncallable: cannot call value" <+> pretty v
-renderExn (TypeErr expected value) = PP.nest 2 $ PP.vsep
-  [ "Type Error:"
-  , "expecting:" <+> pretty expected
-  , "got value:" <+> pretty value
-  ]
+renderThrowable :: Throwable -> PP.Doc ann
+renderThrowable (PrimThrow exn) = case exn of
+  ScopeErr env name -> "Scope Error:" <+> renderName valueNamespace name <+> "in" <+> "<" <> pretty env <> ">"
+  ShadowErr env name -> "Shadowing Error:" <+> renderName valueNamespace name <+> "in" <+> "<" <> pretty env <> ">"
+  SyntaxErr sexpr msg -> PP.nest 2 . PP.vsep $ ["Syntax Error:" <+> pretty msg, Sexpr.renderPretty sexpr]
+  UncallableExn v -> "Uncallable: cannot call value" <+> pretty v
+  TypeErr expected value -> PP.nest 2 $ PP.vsep
+    [ "Type Error:"
+    , "expecting:" <+> pretty expected
+    , "got value:" <+> pretty value
+    ]
+renderThrowable (UserThrow p vs) = PP.viaShow p <+> PP.viaShow vs -- TODO
